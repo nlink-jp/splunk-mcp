@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [v0.1.0] - 2026-07-30
+
+Initial release.
 
 ### Added
 
@@ -38,3 +40,5 @@ All notable changes to this project will be documented in this file.
   `splunk/splunk:9.4` harness ported from splunk-cli, plus tool-layer live
   E2E covering the exact-count guarantee, JSONL file mediation, async flow,
   cancel, and failure surfacing (BUILD.md documents the workflow).
+
+[v0.1.0]: https://github.com/nlink-jp/splunk-mcp/releases/tag/v0.1.0

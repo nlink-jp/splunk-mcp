@@ -43,6 +43,10 @@ func Register(srv *mcpserver.Server, c *client.Client, cfg *config.Config, logge
 	srv.RegisterTool(checkJobTool, d.checkJob)
 	srv.RegisterTool(getResultsTool, d.getResults)
 	srv.RegisterTool(cancelJobTool, d.cancelJob)
+	srv.RegisterTool(listIndexesTool, d.listIndexes)
+	srv.RegisterTool(listSourcetypesTool, d.listSourcetypes)
+	srv.RegisterTool(listSavedSearchesTool, d.listSavedSearches)
+	srv.RegisterTool(runSavedSearchTool, d.runSavedSearch)
 	srv.RegisterTool(getUsageTool, d.getUsage)
 }
 

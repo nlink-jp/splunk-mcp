@@ -59,14 +59,15 @@ func Newf(code, format string, args ...any) *Error {
 // is a no-op for older clients (they fall back to inspecting Message), but
 // renaming an existing code is a breaking change.
 const (
-	CodeInvalidArguments  = "invalid_arguments"
-	CodeMissingArgument   = "missing_argument"
-	CodeUnsafeSPL         = "unsafe_spl"
-	CodeSplunkAPI         = "splunk_api_error"
-	CodeJobNotFound       = "job_not_found"
-	CodeJobNotDone        = "job_not_done"
-	CodeJobFailed         = "job_failed"
-	CodeWaitTimeout       = "wait_timeout"
-	CodeWorkspaceRequired = "workspace_required"
-	CodeWorkspaceError    = "workspace_error"
+	CodeInvalidArguments    = "invalid_arguments"
+	CodeMissingArgument     = "missing_argument"
+	CodeSavedSearchNotFound = "saved_search_not_found"
+	CodeUnsafeSPL           = "unsafe_spl"
+	CodeSplunkAPI           = "splunk_api_error"
+	CodeJobNotFound         = "job_not_found"
+	CodeJobNotDone          = "job_not_done"
+	CodeJobFailed           = "job_failed"
+	CodeWaitTimeout         = "wait_timeout"
+	CodeWorkspaceRequired   = "workspace_required"
+	CodeWorkspaceError      = "workspace_error"
 )

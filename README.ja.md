@@ -33,6 +33,10 @@ splunk-mcp はすべての検索を**非同期 Splunk ジョブ**として実行
 | `check_job` | SID でジョブ状態・件数を確認 |
 | `get_results` | 完了ジョブの結果取得（offset/count ページング） |
 | `cancel_job` | 実行中ジョブのキャンセル |
+| `list_indexes` | 参照可能なインデックス一覧（件数・時間範囲付き） |
+| `list_sourcetypes` | インデックス/期間毎の sourcetype 一覧（`\| metadata` 経由） |
+| `list_saved_searches` | 保存済みサーチの一覧（SPL・スケジュール付き） |
+| `run_saved_search` | 保存済みサーチの実行（アラートアクションは発火しない） |
 | `get_usage` | エージェント向けツールリファレンス |
 
 ### 結果の返し方
@@ -113,11 +117,15 @@ splunk-mcp --version
 
 エージェントの典型的なワークフロー:
 
+- **まず探索** — `list_indexes` → `list_sourcetypes` でデータ構造を把握して
+  から SPL を書く。
 - **クイック分析** — `run_query` に SPL を渡す。`wait_seconds`（デフォルト
   300 秒）以内に完了すれば確定件数付きで結果が返る。
 - **長時間検索** — `start_query` → `check_job` をポーリング → `get_results`。
 - **大規模結果** — `workspace_root`（絶対パス）を渡すと全件が JSONL ファイル
   + プレビューで届く。行が失われることはない。
+- **保存済みサーチ** — `list_saved_searches` → `run_saved_search`（時間窓の
+  上書き可。アラートアクションは常に抑止）。
 
 ## 運用メモ
 

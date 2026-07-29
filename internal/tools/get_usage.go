@@ -51,12 +51,26 @@ retrieval is guaranteed. There is no silent truncation.
 | check_job | Poll job state / result count by SID |
 | get_results | Fetch results of a completed job (offset/count paging) |
 | cancel_job | Cancel a running job |
+| list_indexes | List visible event indexes (event counts, time bounds) |
+| list_sourcetypes | List sourcetypes for an index/window (exact counts) |
+| list_saved_searches | List saved searches with their SPL and schedule |
+| run_saved_search | Dispatch a saved search under the run_query contract |
 | get_usage | This document |
 
 ## Typical workflows
 
+Discover the data first (recommended before writing SPL):
+1. list_indexes -> pick an index
+2. list_sourcetypes {"index": "main"} -> see what's in it
+3. run_query with informed SPL
+
 Quick analysis (completes within wait_seconds, default 300):
 1. run_query {"spl": "index=main sourcetype=syslog | stats count by host"}
+
+Saved searches:
+1. list_saved_searches -> pick by name
+2. run_saved_search {"name": "..."} (optionally override earliest_time /
+   latest_time; alert actions are never triggered)
 
 Long-running search:
 1. start_query {"spl": "..."} -> sid
@@ -89,6 +103,7 @@ authority.
 | job_not_done | get_results on an unfinished job | Poll check_job until is_done |
 | job_not_found | SID expired (TTL) or wrong | Re-run the search; consider [server] job_ttl in config |
 | job_failed | Splunk reported FAILED | Read error_messages in details; fix the SPL |
+| saved_search_not_found | Unknown saved-search name | list_saved_searches for exact names (namespace-sensitive) |
 | workspace_required | Result exceeds inline threshold, no workspace_root | Retry with workspace_root (absolute path), raise inline_row_threshold, or page with get_results offset/count |
 | workspace_error | Could not write results file | Check the workspace_root path/permissions |
 | splunk_api_error | HTTP/auth/network failure | Check host, token validity, and network; details are in the message |

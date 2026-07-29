@@ -43,7 +43,8 @@ internal/
   config/                  TOML [splunk]+[server] config, env overrides   [ported: splunk-cli, extended]
   spl/                     prepend modes (auto|pipe-only|off) + destructive-command guard
   client/                  Splunk REST client (jobs v1 endpoints)         [ported: splunk-cli, slog + TTL + raw rows]
-  tools/                   The 6 MCP tools + JSONL file mediation
+                           + discovery.go (indexes / saved-search listing, dispatch)
+  tools/                   The 10 MCP tools + JSONL file mediation
 config.example.toml        Template config (one file per Splunk host)
 ```
 
@@ -75,6 +76,11 @@ config.example.toml        Template config (one file per Splunk host)
 - MCP has no protocol-level cancel: request handling is serial, so a long
   run_query blocks the loop. get_usage steers agents to start_query for
   anything slow.
+- list_sourcetypes interpolates the index arg into SPL — it is validated
+  against `^[A-Za-z0-9_*-]+$` so injection is impossible; widen with care.
+- run_saved_search always sends `trigger_actions=0` (an analysis tool must
+  never fire alert actions) and escapes the name with url.PathEscape —
+  url.JoinPath would treat an embedded "/" as a path separator.
 
 ## Release
 

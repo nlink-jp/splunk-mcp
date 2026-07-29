@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Discovery tools (RFP Phase 2): `list_indexes` (REST entity listing with
+  event counts and time bounds), `list_sourcetypes` (`| metadata` search
+  with strict index-name validation), `list_saved_searches`, and
+  `run_saved_search` (dispatch under the run_query contract;
+  `trigger_actions=0` always, `saved_search_not_found` structured error,
+  names escaped so spaces and slashes are safe). Live container tests cover
+  all four.
 - Initial implementation (RFP Phase 1: Core).
 - MCP stdio server skeleton ported from data-toolbox-mcp
   (transport / jsonrpc / mcpserver / toolerr / logging).

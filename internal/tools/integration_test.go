@@ -32,11 +32,20 @@ type fakeSplunk struct {
 	failed         bool
 	failText       string
 
-	polls        int
-	resultsCalls int
-	cancelCalls  int
-	lastSPL      string
-	sid          string
+	// Discovery fixtures: entries served by /data/indexes and
+	// /saved/searches; savedSearchName gates /dispatch (404 otherwise).
+	indexes         []map[string]any
+	savedSearches   []map[string]any
+	savedSearchName string
+
+	polls            int
+	resultsCalls     int
+	cancelCalls      int
+	dispatchCalls    int
+	lastSPL          string
+	lastDispatchName string
+	lastDispatchForm map[string][]string
+	sid              string
 }
 
 func (f *fakeSplunk) handler() http.Handler {
@@ -50,6 +59,26 @@ func (f *fakeSplunk) handler() http.Handler {
 			f.lastSPL = r.FormValue("search")
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]string{"sid": f.sid})
+
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/dispatch"):
+			parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/dispatch"), "/")
+			name := parts[len(parts)-1]
+			if f.savedSearchName == "" || name != f.savedSearchName {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_ = r.ParseForm()
+			f.dispatchCalls++
+			f.lastDispatchName = name
+			f.lastDispatchForm = r.Form
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]string{"sid": f.sid})
+
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/data/indexes"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"entry": f.indexes})
+
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/saved/searches"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"entry": f.savedSearches})
 
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/control"):
 			if !strings.Contains(r.URL.Path, f.sid) {

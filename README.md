@@ -35,6 +35,10 @@ poll until `DONE` → read the final `resultCount` → page through
 | `check_job` | Poll job state / result count by SID |
 | `get_results` | Fetch results of a completed job (offset/count paging) |
 | `cancel_job` | Cancel a running job |
+| `list_indexes` | List visible event indexes with counts and time bounds |
+| `list_sourcetypes` | List sourcetypes for an index/window (via `\| metadata`) |
+| `list_saved_searches` | List saved searches with their SPL and schedule |
+| `run_saved_search` | Dispatch a saved search (alert actions never fire) |
 | `get_usage` | Full tool reference served to the agent |
 
 ### Result delivery
@@ -116,11 +120,16 @@ splunk-mcp --version
 
 Typical agent workflows:
 
+- **Discover first** — `list_indexes` → `list_sourcetypes` to learn the data
+  landscape before writing SPL.
 - **Quick analysis** — `run_query` with SPL; completes within `wait_seconds`
   (default 300) and returns exact counts.
 - **Long-running search** — `start_query` → poll `check_job` → `get_results`.
 - **Large result set** — pass `workspace_root` (absolute path); the full set
   arrives as a JSONL file plus preview. No rows are ever dropped.
+- **Saved searches** — `list_saved_searches` → `run_saved_search`
+  (optionally overriding the dispatch time window; alert actions are always
+  suppressed).
 
 ## Operational notes
 

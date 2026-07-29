@@ -131,11 +131,17 @@ splunk-mcp --version
 ## 開発
 
 ```bash
-make test    # go test ./...
-make vet     # go vet ./...
-make check   # vet + test + build
-make build   # dist/splunk-mcp に出力
+make test              # go test ./...（ユニットテスト、外部依存なし）
+make vet               # go vet ./...
+make check             # vet + test + build
+make build             # dist/splunk-mcp に出力
+make integration-test  # Splunk コンテナ（Podman）を起動して実機 E2E テスト
+make splunk-down       # Splunk テストコンテナの停止・削除
 ```
+
+統合テストは実際の `splunk/splunk:9.4` コンテナに対してフルライフサイクル
+（確定件数・JSONL ファイル媒介・非同期フロー）を検証します。詳細は
+[BUILD.md](BUILD.md) を参照。
 
 ## ライセンス
 

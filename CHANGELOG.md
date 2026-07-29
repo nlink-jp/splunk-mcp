@@ -27,3 +27,7 @@ All notable changes to this project will be documented in this file.
 - Config: one instance = one Splunk host; `--config` /
   `$SPLUNK_MCP_CONFIG` path switching; `SPLUNK_*` env vars shared with
   splunk-cli.
+- Container-based integration tests (`make integration-test`): Podman
+  `splunk/splunk:9.4` harness ported from splunk-cli, plus tool-layer live
+  E2E covering the exact-count guarantee, JSONL file mediation, async flow,
+  cancel, and failure surfacing (BUILD.md documents the workflow).

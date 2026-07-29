@@ -134,11 +134,17 @@ Typical agent workflows:
 ## Development
 
 ```bash
-make test    # go test ./...
-make vet     # go vet ./...
-make check   # vet + test + build
-make build   # outputs dist/splunk-mcp
+make test              # go test ./...  (unit tests, no external deps)
+make vet               # go vet ./...
+make check             # vet + test + build
+make build             # outputs dist/splunk-mcp
+make integration-test  # start a Splunk container (Podman) and run live E2E tests
+make splunk-down       # stop and remove the Splunk test container
 ```
+
+Integration tests run the full lifecycle — exact counts, JSONL file
+mediation, async flow — against a real `splunk/splunk:9.4` container.
+See [BUILD.md](BUILD.md) for details.
 
 ## License
 

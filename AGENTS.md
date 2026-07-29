@@ -15,10 +15,12 @@ mechanism). RFP: `docs/ja/splunk-mcp-rfp.ja.md`.
 ## Build & test
 
 ```bash
-make build   # → dist/splunk-mcp  (never `go build` directly — pollutes repo root)
-make test    # go test ./...
-make vet     # go vet ./...
-make check   # vet + test + build
+make build             # → dist/splunk-mcp  (never `go build` directly — pollutes repo root)
+make test              # go test ./...  (unit; mock Splunk, no container)
+make vet               # go vet ./...
+make check             # vet + test + build
+make integration-test  # Podman splunk/splunk:9.4 container + `-tags integration` live E2E
+make splunk-down       # tear down the container (name `splunk-test`, shared with splunk-cli)
 ```
 
 `--version` must keep answering (homebrew formula test depends on it);
@@ -65,6 +67,11 @@ config.example.toml        Template config (one file per Splunk host)
 - Tests use `Client.PollInterval` (default 2 s) shortened to ms; fakeSplunk
   in `internal/tools/integration_test.go` counts status polls — each
   checkJob/getResults call consumes one.
+- Live E2E (`client_integration_test.go`, `tools_integration_test.go`,
+  `//go:build integration`) skips unless SPLUNK_HOST/SPLUNK_TOKEN are set;
+  `make integration-test` provisions them from the container. Harness ported
+  from splunk-cli (`scripts/splunk-up.sh` / `splunk-down.sh`); details in
+  BUILD.md.
 - MCP has no protocol-level cancel: request handling is serial, so a long
   run_query blocks the loop. get_usage steers agents to start_query for
   anything slow.

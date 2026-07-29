@@ -1,0 +1,60 @@
+# splunk-mcp example configuration
+#
+# One MCP server instance connects to exactly one Splunk host. For multiple
+# destinations, create one config file per host and register the server
+# multiple times under different names:
+#
+#   { "splunk-prod": { "command": "splunk-mcp", "args": ["--config", "/path/to/prod.toml"] },
+#     "splunk-dev":  { "command": "splunk-mcp", "args": ["--config", "/path/to/dev.toml"] } }
+#
+# Copy to ~/.config/splunk-mcp/config.toml (the default path) and run:
+#   chmod 600 ~/.config/splunk-mcp/config.toml
+# Connection settings can also come from env vars (SPLUNK_HOST, SPLUNK_TOKEN,
+# SPLUNK_USER, SPLUNK_PASSWORD, SPLUNK_APP), which override the file.
+
+[splunk]
+# Splunk server URL including the management port (required)
+host = "https://your-splunk.example.com:8089"
+
+# Authentication: use either token (recommended) or user + password.
+token = ""
+# user     = ""
+# password = ""
+
+# App context for searches (optional, default: no app namespace)
+# app = "search"
+
+# Knowledge object owner (default: nobody)
+# owner = "nobody"
+
+# Skip TLS certificate verification — use only for self-signed certs in dev
+# insecure = false
+
+# Per-request HTTP timeout (default: 30s). This bounds single HTTP calls,
+# not search runtime — long searches are handled by the async job pattern.
+# http_timeout = "30s"
+
+# How the SPL you submit is wrapped (same three modes as splunk-cli):
+#   "pipe-only" (default) — prepend "search " unless the SPL starts with "|"
+#   "auto"                — also skip when it already starts with the search command
+#   "off"                 — never prepend
+# prepend = "pipe-only"
+
+[server]
+# Row count at or below which results are returned inline. Above it, results
+# are written as a JSONL file under the caller-supplied workspace_root.
+# 0 = always file-mediate.
+# inline_row_threshold = 100
+
+# Keep completed jobs alive for this long so results stay retrievable
+# (sent as the job's TTL at creation; Splunk's default is a few minutes).
+# job_ttl = "10m"
+
+# Destructive SPL commands to allow despite the default guard
+# (delete, collect, mcollect, meventcollect, outputlookup, outputcsv,
+#  sendemail, runshellscript, script are blocked by default).
+# allow_commands = []
+
+# Logging: level debug|info|warn|error (default info); log_file empty = stderr only.
+# log_level = "info"
+# log_file  = ""

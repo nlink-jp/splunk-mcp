@@ -1,42 +1,78 @@
+MODULE  := github.com/nlink-jp/splunk-mcp
 BINARY  := splunk-mcp
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-X github.com/nlink-jp/splunk-mcp/cmd.Version=$(VERSION)"
 DIST_DIR := dist
 
-.PHONY: build build-all test vet check clean \
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS := -ldflags "-s -w -X $(MODULE)/cmd.Version=$(VERSION)"
+
+# macOS Developer ID signing / notarization (see CONVENTIONS.md §Code
+# Signing). Defaults match any Developer ID Application cert in the
+# keychain and the org-standard notary profile. Builds without these
+# fall back to ad-hoc / un-notarized with a one-line warning.
+CODESIGN_IDENTITY ?= Developer ID Application
+NOTARY_PROFILE    ?= nlink-jp-notary
+
+# darwin ships arm64 only (no amd64, no universal). linux/windows keep their matrix.
+PLATFORMS := darwin/arm64 linux/amd64 linux/arm64 windows/amd64
+
+.PHONY: build build-all package test vet check clean help \
 	splunk-up splunk-down integration-test
 
+## build: Build binary for the current OS/Arch → ./dist/splunk-mcp
 build:
 	@mkdir -p $(DIST_DIR)
 	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY) .
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY) "$(CODESIGN_IDENTITY)"
 
+## build-all: Cross-compile and codesign the darwin build
 build-all:
 	@mkdir -p $(DIST_DIR)
-	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-amd64   .
-	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-linux-arm64   .
-	# darwin is arm64-only (no amd64, no universal — see org CONVENTIONS.md §Release Archive Standard)
-	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-arm64  .
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .
+	@for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
+		ext=""; [ "$$os" = windows ] && ext=".exe"; \
+		echo "Building $(DIST_DIR)/$(BINARY)-$$os-$$arch$$ext..."; \
+		GOOS=$$os GOARCH=$$arch go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-$$os-$$arch$$ext . ; \
+	done
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)" "$(BINARY)"
 
+## package: archive each platform as <name>-v<version>-<os>-<arch>.<ext>
+## (darwin/windows=zip, linux=tar.gz); canonical binary + README + LICENSE
+## inside; notarize the darwin arm64 zip.
+package: build-all
+	@cd $(DIST_DIR) && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
+		ext=""; [ "$$os" = windows ] && ext=".exe"; \
+		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \
+		cp "$(BINARY)-$$os-$$arch$$ext" "$$stage/$(BINARY)$$ext"; \
+		cp ../README.md ../LICENSE $$stage/; \
+		base="$(BINARY)-$(VERSION)-$$os-$$arch"; \
+		if [ "$$os" = linux ]; then ( cd $$stage && tar -czf "../$$base.tar.gz" * ); \
+		else ( cd $$stage && zip -q "../$$base.zip" * ); fi; \
+		rm -rf $$stage; \
+	done
+	@scripts/notarize-darwin.sh $(DIST_DIR)/$(BINARY)-$(VERSION)-darwin-arm64.zip "$(NOTARY_PROFILE)"
+
+## test: Run all unit tests
 test:
 	go test ./...
 
+## vet: Run go vet
 vet:
 	go vet ./...
 
+## check: vet + test + build
 check: vet test build
 
+## splunk-up: Start the Splunk integration-test container (Podman)
 splunk-up:
 	@eval "$$(scripts/splunk-up.sh)" && \
 		printf '\nSplunk is up. To set env vars in your shell:\n' && \
 		printf '  eval "$$(scripts/splunk-up.sh)"\n\n'
 
+## splunk-down: Stop and remove the Splunk test container
 splunk-down:
 	scripts/splunk-down.sh
 
-## Run integration tests against a live Splunk container.
+## integration-test: Run -tags integration tests against a live Splunk container.
 ## Starts Splunk automatically if not already running; leaves it running afterwards.
-## Use 'make splunk-down' to tear it down when done.
 integration-test:
 	@if ! podman container exists splunk-test 2>/dev/null || \
 	    [ "$$(podman inspect --format '{{.State.Status}}' splunk-test 2>/dev/null)" != "running" ]; then \
@@ -54,5 +90,17 @@ integration-test:
 		SPLUNK_TOKEN="$${TOKEN}" \
 		go test -v -tags integration -timeout 10m ./internal/client/... ./internal/tools/...
 
+## clean: Remove build artifacts
 clean:
 	rm -rf $(DIST_DIR)
+
+## help: Show available targets
+help:
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## //'
+
+# Homebrew tap generation (see scripts/release-brew.mk). After `make package`,
+# `make brew` generates this formula from the built darwin-arm64 zip into the
+# local nlink-jp/homebrew-tap checkout. The package target is unchanged.
+BREW_KIND := formula
+BREW_DESC := MCP server for Splunk search with exact result counts over the REST API
+include scripts/release-brew.mk

@@ -136,7 +136,7 @@ Reason: nlink-jp の MCP サーバー群（data-toolbox-mcp、voice-studio-mcp�
 
 ## Discussion Log
 
-- **背景**: 手元の公式 Splunk MCP Server アプリ（`/Users/magi/works/oss/Splunk_MCP_Server`）のソースを確認し、oneshot 実行（60秒タイムアウト）+ `| head N` 注入（max_row_limit 1000）+ 上限到達時の近似件数返却が実装上の事実であることを確認。件数不安定はバグではなく設計で、外部から修正不可能と判断し、REST API 直叩きのローカル MCP への完全焼き直しを決定
+- **背景**: 手元に clone した公式 Splunk MCP Server アプリ（`oss/Splunk_MCP_Server`）のソースを確認し、oneshot 実行（60秒タイムアウト）+ `| head N` 注入（max_row_limit 1000）+ 上限到達時の近似件数返却が実装上の事実であることを確認。件数不安定はバグではなく設計で、外部から修正不可能と判断し、REST API 直叩きのローカル MCP への完全焼き直しを決定
 - **ツール名**: splunk-mcp（splunk-cli と対になる最短名。スコープ拡張しても破綻しない）を採用。splunk-search-mcp / splunk-query-mcp は不採用
 - **スコープ**: クエリ実行コアに加え、メタデータ探索と saved search 実行もフル構成で採用（探索系は Phase 2 に分離）
 - **安全ガード**: 「破壊系のみブロック」を採用。「ガードなし（RBAC 全面依存）」「読み取り専用 allowlist」は不採用（後者は公式アプリと同じ allowlist 保守コスト問題を抱え込むため）

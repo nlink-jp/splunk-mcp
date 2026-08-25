@@ -21,6 +21,7 @@ make vet               # go vet ./...
 make check             # vet + test + build
 make integration-test  # Podman splunk/splunk:9.4 container + `-tags integration` live E2E
 make splunk-down       # tear down the container (name `splunk-test`, shared with splunk-cli)
+make verify-release  # gate: .notarized marker + freshness (run before upload)
 ```
 
 `--version` must keep answering (homebrew formula test depends on it);

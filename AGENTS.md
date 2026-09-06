@@ -17,6 +17,7 @@ mechanism). RFP: `docs/ja/splunk-mcp-rfp.ja.md`.
 ```bash
 make build             # → dist/splunk-mcp  (never `go build` directly — pollutes repo root)
 make test              # go test ./...  (unit; mock Splunk, no container)
+make test-linux        # same suite on Linux (container)
 make vet               # go vet ./...
 make check             # vet + test + build
 make integration-test  # Podman splunk/splunk:9.4 container + `-tags integration` live E2E

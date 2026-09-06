@@ -120,3 +120,8 @@ help:
 BREW_KIND := formula
 BREW_DESC := MCP server for Splunk search with exact result counts over the REST API
 include scripts/release-brew.mk
+
+## test-linux: run the test suite inside a Linux container (podman/docker)
+.PHONY: test-linux
+test-linux:
+	@scripts/test-linux.sh

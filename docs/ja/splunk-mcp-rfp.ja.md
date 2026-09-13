@@ -35,10 +35,16 @@ Phase 2 で追加する探索系ツール:
 
 ### Input / Output
 
-- 入力: SPL 文字列、時間範囲（earliest / latest、Splunk time modifier 形式）、app コンテキスト、行数閾値、workspace_root
+- 入力: SPL 文字列、時間範囲（earliest / latest、Splunk time modifier 形式）、app コンテキスト、`max_rows`（**2026-09-13 改定**: 旧 `workspace_root` + 行数閾値を置換）
 - 出力（結果返却の2形態）:
   - 結果が閾値（デフォルト 100 行、config / ツール引数で変更可）以下 → インライン JSON
-  - 閾値超え → `workspace_root` 配下に JSONL で**全件**書き出し、`results_file` パス + 先頭プレビュー + 確定件数を返す（切り捨てなし。書き出したファイルは data-toolbox-mcp でそのまま分析継続可能）
+  - `max_rows` 超え → 超過分をレスポンスから外し、`truncated` + `omitted_rows` + 確定 `total_rows` を返す（**黙った切り捨ては無い**）
+
+> **2026-09-13 改定（スコープ決定の変更）**: ファイル媒介返却を撤回した。サーバーは
+> 呼び出し側のコンテキスト窓を知り得ず、閾値・退避先・読み戻しをサーバーごとに持つと
+> フリート全体で同じ機構を重複実装することになる（利用者決定 2026-09-06、bigquery-mcp
+> RFP Item 2）。大きなレスポンスのファイル化はエージェントランタイムの仕事
+> （gem-agent ADR-0058 の intake）。本サーバーに残るのは**明示キャップと省略の計上**だけ。
 - ツールエラーは構造化 JSON（`{code, message}`、nlink-jp MCP 規約）
 
 ### Configuration
@@ -96,7 +102,7 @@ inline_row_threshold = 100
 - data-toolbox-mcp から MCP 骨格移植、splunk-cli から REST クライアント / 認証 / prepend 正規化をコピー移植
 - コアツール6種（run_query / start_query / check_job / get_results / cancel_job / get_usage）
 - 非同期ジョブパターン（ジョブ作成 → ポーリング → 確定件数 → ページング全件取得）
-- ファイル媒介返却（閾値、JSONL 書き出し、プレビュー）
+- ~~ファイル媒介返却（閾値、JSONL 書き出し、プレビュー）~~ → 2026-09-13 撤回。`max_rows` による明示キャップに置換
 - 破壊系コマンドガード
 - テスト: モック HTTP サーバーで REST 層・ジョブライフサイクル・ガード・閾値分岐を検証
 

@@ -24,9 +24,6 @@ import (
 // returning wait_timeout (the job keeps running server-side).
 const DefaultWaitSeconds = 300.0
 
-// previewRowCount is how many head rows accompany a file-mediated result.
-const previewRowCount = 5
-
 // deps carries shared dependencies into the tool handlers.
 type deps struct {
 	client *client.Client
@@ -61,13 +58,18 @@ func (d *deps) checkGuard(query string) error {
 	return nil
 }
 
-// threshold resolves the effective inline row threshold for a call.
-func (d *deps) threshold(override *int) (int, error) {
+// maxRows resolves the cap on rows returned for one call: the caller's own
+// max_rows, else the configured default. 0 means no cap.
+//
+// The caller owns this number, because the caller is the only party that knows
+// its context window — the reason this server stopped deciding for it by
+// writing files (organization policy, 2026-09-06).
+func (d *deps) maxRows(override *int) (int, error) {
 	if override == nil {
-		return d.cfg.InlineRowThreshold, nil
+		return d.cfg.MaxRows, nil
 	}
 	if *override < 0 {
-		return 0, toolerr.New(toolerr.CodeInvalidArguments, "inline_row_threshold must be >= 0")
+		return 0, toolerr.New(toolerr.CodeInvalidArguments, "max_rows must be >= 0 (0 means no cap)")
 	}
 	return *override, nil
 }
@@ -79,49 +81,41 @@ type jobResult struct {
 	Offset       int               `json:"offset,omitempty"`
 	ReturnedRows int               `json:"returned_rows"`
 	Results      []json.RawMessage `json:"results,omitempty"`
-	ResultsFile  string            `json:"results_file,omitempty"`
-	Preview      []json.RawMessage `json:"preview,omitempty"`
-	Note         string            `json:"note,omitempty"`
+	// Truncated and OmittedRows appear only when the cap dropped something.
+	// Their presence is the signal; TotalRows stays exact either way, so a
+	// capped answer is still an answer about the whole result set.
+	Truncated   bool   `json:"truncated,omitempty"`
+	OmittedRows int    `json:"omitted_rows,omitempty"`
+	Note        string `json:"note,omitempty"`
 }
 
-// shapeResults applies the inline-vs-file contract to fetched rows.
-// The caller must have pre-checked workspaceRequired so a large fetch is
-// never thrown away here.
-func (d *deps) shapeResults(sid string, rows []json.RawMessage, total, offset, threshold int, workspaceRoot string) (jobResult, error) {
+// shapeResults applies the row cap to fetched rows.
+//
+// Everything that fits comes back inline; what does not is dropped from the
+// response and counted. This server no longer writes results to a file it
+// chose: it cannot know the caller's context window, and a runtime that needs
+// a large response on disk already puts it there (gem-agent ADR-0058). What is
+// never allowed is a quiet cut — total_rows stays exact, and the drop is
+// reported in the same result.
+func (d *deps) shapeResults(sid string, rows []json.RawMessage, total, offset, maxRows int) jobResult {
 	res := jobResult{
 		SID:          sid,
 		TotalRows:    total,
 		Offset:       offset,
 		ReturnedRows: len(rows),
 	}
-	if len(rows) <= threshold {
+	if maxRows == 0 || len(rows) <= maxRows {
 		res.Results = rows
-		return res, nil
+		return res
 	}
-
-	path, err := writeJSONL(workspaceRoot, sid, rows)
-	if err != nil {
-		return jobResult{}, err
-	}
-	res.ResultsFile = path
-	preview := rows
-	if len(preview) > previewRowCount {
-		preview = preview[:previewRowCount]
-	}
-	res.Preview = preview
-	res.Note = fmt.Sprintf("%d rows exceed the inline threshold (%d); full result set written as JSONL (one row per line). Preview shows the first %d row(s).",
-		len(rows), threshold, len(preview))
-	return res, nil
-}
-
-// workspaceRequired returns a structured error when a fetch of rowCount rows
-// would exceed threshold but no workspace_root was supplied. Called before
-// fetching so no work is wasted; the job stays alive for a retry.
-func workspaceRequired(sid string, rowCount, threshold int) error {
-	return toolerr.Newf(toolerr.CodeWorkspaceRequired,
-		"result set has %d rows, above the inline threshold (%d); pass workspace_root (absolute path) to receive the full set as a JSONL file, raise inline_row_threshold, or page with get_results offset/count",
-		rowCount, threshold).
-		WithDetails(map[string]any{"sid": sid, "total_rows": rowCount})
+	res.Results = rows[:maxRows]
+	res.ReturnedRows = maxRows
+	res.Truncated = true
+	res.OmittedRows = len(rows) - maxRows
+	res.Note = fmt.Sprintf(
+		"%d of %d fetched rows were dropped by max_rows (%d). total_rows is exact; page with get_results offset/count, or raise max_rows if your context can hold it.",
+		res.OmittedRows, len(rows), maxRows)
+	return res
 }
 
 func parseArgs(args json.RawMessage, into any) error {

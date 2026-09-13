@@ -18,19 +18,17 @@ var getResultsTool = mcpserver.Tool{
 			"sid": {"type": "string", "description": "Search job SID."},
 			"offset": {"type": "integer", "description": "First row to fetch (default 0)."},
 			"count": {"type": "integer", "description": "Rows to fetch from offset (default 0 = all remaining)."},
-			"workspace_root": {"type": "string", "description": "Absolute directory for file-mediated results. Required when the fetched slice exceeds the inline threshold."},
-			"inline_row_threshold": {"type": "integer", "description": "Per-call override of the inline threshold (default from config, 100)."}
+			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
 		},
 		"required": ["sid"]
 	}`),
 }
 
 type getResultsArgs struct {
-	SID                string `json:"sid"`
-	Offset             int    `json:"offset"`
-	Count              int    `json:"count"`
-	WorkspaceRoot      string `json:"workspace_root"`
-	InlineRowThreshold *int   `json:"inline_row_threshold"`
+	SID     string `json:"sid"`
+	Offset  int    `json:"offset"`
+	Count   int    `json:"count"`
+	MaxRows *int   `json:"max_rows"`
 }
 
 func (d *deps) getResults(ctx context.Context, args json.RawMessage) (any, error) {
@@ -47,7 +45,7 @@ func (d *deps) getResults(ctx context.Context, args json.RawMessage) (any, error
 	if a.Count < 0 {
 		return nil, toolerr.New(toolerr.CodeInvalidArguments, "count must be >= 0 (0 = all remaining)")
 	}
-	threshold, err := d.threshold(a.InlineRowThreshold)
+	maxRows, err := d.maxRows(a.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +74,10 @@ func (d *deps) getResults(ctx context.Context, args json.RawMessage) (any, error
 	if fetch <= 0 || fetch > total-a.Offset {
 		fetch = max(total-a.Offset, 0)
 	}
-	if fetch > threshold && a.WorkspaceRoot == "" {
-		return nil, workspaceRequired(a.SID, fetch, threshold)
-	}
 
 	rows, err := d.client.FetchResults(ctx, a.SID, a.Offset, a.Count, total)
 	if err != nil {
 		return nil, toolerr.Newf(toolerr.CodeSplunkAPI, "fetch results: %v", err)
 	}
-	return d.shapeResults(a.SID, rows, total, a.Offset, threshold, a.WorkspaceRoot)
+	return d.shapeResults(a.SID, rows, total, a.Offset, maxRows), nil
 }

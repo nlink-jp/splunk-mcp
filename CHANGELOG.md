@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking: results are no longer written to a file by this server.**
+  `workspace_root`, `results_file` and the head preview are gone, and so is the
+  inline/file branching. A server cannot know the caller's context window;
+  deciding a threshold, a destination and a read-back path per server meant the
+  whole fleet reimplementing the same mechanism, and putting a large response on
+  disk is the calling runtime's job (gem-agent does it automatically). What
+  stays here is the explicit cap and the count of what it dropped.
+- **Breaking: `inline_row_threshold` is replaced by `max_rows`** — as a config
+  key and as a per-call argument, with a different meaning: the cap on rows a
+  response may carry, default **50,000**, `0` meaning no cap. A config still
+  carrying `inline_row_threshold` fails at startup rather than being ignored,
+  because a limit an operator wrote and had ignored is the worse outcome.
+- Results that hit the cap carry `truncated`, `omitted_rows` and a note saying
+  how to get the rest. **`total_rows` stays exact either way** — the count is
+  the product, so a capped answer is still an answer about the whole result set.
+- The `workspace_required` error code is gone with the mechanism; nothing
+  replaces it (`max_rows` never fails, it reports).
+
 ## [v0.1.0] - 2026-07-30
 
 Initial release.

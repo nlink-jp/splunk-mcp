@@ -63,15 +63,14 @@ func TestLive_RunQuery_ExactCountInline(t *testing.T) {
 // TestLive_RunQuery_FileMediated verifies the no-truncation contract on a
 // real Splunk: every generated row must land in the JSONL file.
 func TestLive_RunQuery_FileMediated(t *testing.T) {
-	d := liveDeps(t, func(c *config.Config) { c.InlineRowThreshold = 10 })
+	d := liveDeps(t, func(c *config.Config) { c.MaxRows = 10 })
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	ws := t.TempDir()
 
 	const want = 250
 	out, err := d.runQuery(ctx, mustJSON(t, map[string]any{
-		"spl":            `| makeresults count=250 | streamstats count as n | fields n`,
-		"workspace_root": ws,
+		"spl": `| makeresults count=250 | streamstats count as n | fields n`,
 	}))
 	if err != nil {
 		t.Fatalf("runQuery: %v", err)
@@ -109,7 +108,7 @@ func TestLive_RunQuery_FileMediated(t *testing.T) {
 // TestLive_RunQuery_WorkspaceRequired checks the pre-fetch guard and that the
 // job stays fetchable afterwards via get_results.
 func TestLive_RunQuery_WorkspaceRequired(t *testing.T) {
-	d := liveDeps(t, func(c *config.Config) { c.InlineRowThreshold = 5 })
+	d := liveDeps(t, func(c *config.Config) { c.MaxRows = 5 })
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

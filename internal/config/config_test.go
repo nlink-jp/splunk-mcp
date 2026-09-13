@@ -26,8 +26,8 @@ func TestLoad_MissingFile(t *testing.T) {
 	if cfg.Host != "" {
 		t.Errorf("expected empty Host, got %q", cfg.Host)
 	}
-	if cfg.InlineRowThreshold != DefaultInlineRowThreshold {
-		t.Errorf("InlineRowThreshold default = %d", cfg.InlineRowThreshold)
+	if cfg.MaxRows != DefaultMaxRows {
+		t.Errorf("MaxRows default = %d", cfg.MaxRows)
 	}
 }
 
@@ -61,7 +61,7 @@ insecure = true
 func TestLoad_ServerSection(t *testing.T) {
 	path := writeConfig(t, `
 [server]
-inline_row_threshold = 250
+max_rows = 250
 job_ttl              = "10m"
 allow_commands       = ["Collect", " outputlookup "]
 log_level            = "debug"
@@ -71,8 +71,8 @@ log_file             = "/tmp/splunk-mcp.log"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.InlineRowThreshold != 250 {
-		t.Errorf("InlineRowThreshold = %d", cfg.InlineRowThreshold)
+	if cfg.MaxRows != 250 {
+		t.Errorf("MaxRows = %d", cfg.MaxRows)
 	}
 	if cfg.JobTTL != 10*time.Minute {
 		t.Errorf("JobTTL = %v", cfg.JobTTL)
@@ -90,27 +90,27 @@ log_file             = "/tmp/splunk-mcp.log"
 }
 
 func TestLoad_ZeroThresholdIsExplicit(t *testing.T) {
-	// inline_row_threshold = 0 means "always file-mediate", not "use default".
+	// max_rows = 0 means "always file-mediate", not "use default".
 	path := writeConfig(t, `
 [server]
-inline_row_threshold = 0
+max_rows = 0
 `)
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.InlineRowThreshold != 0 {
-		t.Errorf("InlineRowThreshold = %d, want 0", cfg.InlineRowThreshold)
+	if cfg.MaxRows != 0 {
+		t.Errorf("MaxRows = %d, want 0", cfg.MaxRows)
 	}
 }
 
 func TestLoad_NegativeThreshold(t *testing.T) {
 	path := writeConfig(t, `
 [server]
-inline_row_threshold = -1
+max_rows = -1
 `)
 	if _, err := Load(path); err == nil {
-		t.Fatal("expected error for negative inline_row_threshold")
+		t.Fatal("expected error for negative max_rows")
 	}
 }
 

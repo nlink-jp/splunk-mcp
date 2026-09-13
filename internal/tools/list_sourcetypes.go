@@ -22,8 +22,7 @@ var listSourcetypesTool = mcpserver.Tool{
 			"index": {"type": "string", "description": "Index to inspect (default '*' = all searchable indexes). Wildcards allowed."},
 			"earliest_time": {"type": "string", "description": "Window start, Splunk time modifier (default: index lifetime)."},
 			"latest_time": {"type": "string", "description": "Window end, Splunk time modifier."},
-			"workspace_root": {"type": "string", "description": "Absolute directory for file-mediated results (only needed for very large sourcetype sets)."},
-			"inline_row_threshold": {"type": "integer", "description": "Per-call override of the inline threshold."}
+			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
 		}
 	}`),
 }
@@ -34,11 +33,10 @@ var listSourcetypesTool = mcpserver.Tool{
 var indexNamePattern = regexp.MustCompile(`^[A-Za-z0-9_*-]+$`)
 
 type listSourcetypesArgs struct {
-	Index              string `json:"index"`
-	EarliestTime       string `json:"earliest_time"`
-	LatestTime         string `json:"latest_time"`
-	WorkspaceRoot      string `json:"workspace_root"`
-	InlineRowThreshold *int   `json:"inline_row_threshold"`
+	Index        string `json:"index"`
+	EarliestTime string `json:"earliest_time"`
+	LatestTime   string `json:"latest_time"`
+	MaxRows      *int   `json:"max_rows"`
 }
 
 func (d *deps) listSourcetypes(ctx context.Context, args json.RawMessage) (any, error) {
@@ -54,7 +52,7 @@ func (d *deps) listSourcetypes(ctx context.Context, args json.RawMessage) (any, 
 		return nil, toolerr.Newf(toolerr.CodeInvalidArguments,
 			"index must match %s (got %q)", indexNamePattern.String(), index)
 	}
-	threshold, err := d.threshold(a.InlineRowThreshold)
+	maxRows, err := d.maxRows(a.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +77,9 @@ func (d *deps) listSourcetypes(ctx context.Context, args json.RawMessage) (any, 
 	}
 
 	total := status.ResultCount
-	if total > threshold && a.WorkspaceRoot == "" {
-		return nil, workspaceRequired(sid, total, threshold)
-	}
 	rows, err := d.client.FetchResults(ctx, sid, 0, 0, total)
 	if err != nil {
 		return nil, toolerr.Newf(toolerr.CodeSplunkAPI, "fetch results: %v", err)
 	}
-	return d.shapeResults(sid, rows, total, 0, threshold, a.WorkspaceRoot)
+	return d.shapeResults(sid, rows, total, 0, maxRows), nil
 }

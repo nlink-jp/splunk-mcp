@@ -25,9 +25,17 @@ import (
 // Stderr is the writer for warnings. Overridable in tests.
 var Stderr io.Writer = os.Stderr
 
-// DefaultInlineRowThreshold is the row count above which results are written
-// to a workspace file instead of returned inline.
-const DefaultInlineRowThreshold = 100
+// DefaultMaxRows is the cap this server applies to a result set when a call
+// does not name its own. Rows beyond it are not returned, and the response
+// says so with truncated + omitted_rows next to the exact total_rows.
+//
+// It replaces inline_row_threshold, which decided when to spill results into a
+// file the server chose. A server cannot know the caller's context window, and
+// seven servers in this fleet each grew their own spill mechanism to guess at
+// it; file-mediating a large response is the calling runtime's job now
+// (gem-agent ADR-0058). What stays here is the explicit cap and the count of
+// what it dropped.
+const DefaultMaxRows = 50000
 
 // Config holds all runtime configuration for splunk-mcp.
 // Fields are populated in priority order: config file → env vars.
@@ -45,11 +53,11 @@ type Config struct {
 	Prepend     spl.PrependMode
 
 	// [server] — MCP-specific settings.
-	InlineRowThreshold int
-	JobTTL             time.Duration
-	AllowCommands      []string
-	LogLevel           string
-	LogFile            string
+	MaxRows       int
+	JobTTL        time.Duration
+	AllowCommands []string
+	LogLevel      string
+	LogFile       string
 }
 
 // tomlConfig mirrors the TOML file structure.
@@ -71,6 +79,7 @@ type tomlSplunk struct {
 }
 
 type tomlServer struct {
+	MaxRows            *int     `toml:"max_rows"`
 	InlineRowThreshold *int     `toml:"inline_row_threshold"`
 	JobTTL             string   `toml:"job_ttl"`
 	AllowCommands      []string `toml:"allow_commands"`
@@ -90,8 +99,8 @@ func DefaultPath() string {
 // Default returns a Config with all defaults and no connection settings.
 func Default() *Config {
 	return &Config{
-		Prepend:            spl.DefaultMode,
-		InlineRowThreshold: DefaultInlineRowThreshold,
+		Prepend: spl.DefaultMode,
+		MaxRows: DefaultMaxRows,
 	}
 }
 
@@ -144,10 +153,16 @@ func Load(path string) (*Config, error) {
 
 	sv := raw.Server
 	if sv.InlineRowThreshold != nil {
-		if *sv.InlineRowThreshold < 0 {
-			return cfg, fmt.Errorf("config: inline_row_threshold must be >= 0, got %d", *sv.InlineRowThreshold)
+		// The key it replaced decided when to write a file, which this server
+		// no longer does. Silently ignoring it would leave an operator
+		// believing a limit they wrote was in force.
+		return cfg, fmt.Errorf("config: inline_row_threshold was removed — results are no longer written to a file by this server; use max_rows (the cap on rows returned, default %d) instead", DefaultMaxRows)
+	}
+	if sv.MaxRows != nil {
+		if *sv.MaxRows < 0 {
+			return cfg, fmt.Errorf("config: max_rows must be >= 0, got %d", *sv.MaxRows)
 		}
-		cfg.InlineRowThreshold = *sv.InlineRowThreshold
+		cfg.MaxRows = *sv.MaxRows
 	}
 	if sv.JobTTL != "" {
 		d, err := time.ParseDuration(sv.JobTTL)

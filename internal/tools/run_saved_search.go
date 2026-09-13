@@ -24,20 +24,18 @@ var runSavedSearchTool = mcpserver.Tool{
 			"earliest_time": {"type": "string", "description": "Override the saved dispatch window start (Splunk time modifier)."},
 			"latest_time": {"type": "string", "description": "Override the saved dispatch window end."},
 			"wait_seconds": {"type": "number", "description": "Max seconds to wait for completion (default 300). On timeout the job keeps running; poll check_job."},
-			"workspace_root": {"type": "string", "description": "Absolute directory for file-mediated results."},
-			"inline_row_threshold": {"type": "integer", "description": "Per-call override of the inline threshold."}
+			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
 		},
 		"required": ["name"]
 	}`),
 }
 
 type runSavedSearchArgs struct {
-	Name               string   `json:"name"`
-	EarliestTime       string   `json:"earliest_time"`
-	LatestTime         string   `json:"latest_time"`
-	WaitSeconds        *float64 `json:"wait_seconds"`
-	WorkspaceRoot      string   `json:"workspace_root"`
-	InlineRowThreshold *int     `json:"inline_row_threshold"`
+	Name         string   `json:"name"`
+	EarliestTime string   `json:"earliest_time"`
+	LatestTime   string   `json:"latest_time"`
+	WaitSeconds  *float64 `json:"wait_seconds"`
+	MaxRows      *int     `json:"max_rows"`
 }
 
 func (d *deps) runSavedSearch(ctx context.Context, args json.RawMessage) (any, error) {
@@ -48,7 +46,7 @@ func (d *deps) runSavedSearch(ctx context.Context, args json.RawMessage) (any, e
 	if a.Name == "" {
 		return nil, toolerr.New(toolerr.CodeMissingArgument, "name is required")
 	}
-	threshold, err := d.threshold(a.InlineRowThreshold)
+	maxRows, err := d.maxRows(a.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +80,9 @@ func (d *deps) runSavedSearch(ctx context.Context, args json.RawMessage) (any, e
 	}
 
 	total := status.ResultCount
-	if total > threshold && a.WorkspaceRoot == "" {
-		return nil, workspaceRequired(sid, total, threshold)
-	}
 	rows, err := d.client.FetchResults(ctx, sid, 0, 0, total)
 	if err != nil {
 		return nil, toolerr.Newf(toolerr.CodeSplunkAPI, "fetch results: %v", err)
 	}
-	return d.shapeResults(sid, rows, total, 0, threshold, a.WorkspaceRoot)
+	return d.shapeResults(sid, rows, total, 0, maxRows), nil
 }

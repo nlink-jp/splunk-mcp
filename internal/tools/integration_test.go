@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,99 +198,55 @@ func TestRunQuery_Inline(t *testing.T) {
 	if len(res.Results) != 7 {
 		t.Errorf("inline results = %d rows", len(res.Results))
 	}
-	if res.ResultsFile != "" {
-		t.Errorf("unexpected results_file for inline result: %q", res.ResultsFile)
+	if res.Truncated || res.OmittedRows != 0 {
+		t.Errorf("an uncapped result must not report truncation: %+v", res)
 	}
 	if !strings.HasPrefix(f.lastSPL, "search index=main") {
 		t.Errorf("prepend not applied: %q", f.lastSPL)
 	}
 }
 
-func TestRunQuery_FileMediated(t *testing.T) {
+// A result larger than the cap comes back capped, counted, and honest about
+// the total. This server no longer writes a file it chose: the caller's
+// context window is the caller's to know (organization policy, 2026-09-06).
+func TestRunQuery_CappedAndCounted(t *testing.T) {
 	f := &fakeSplunk{rows: 12}
-	d := newTestDeps(t, f, func(c *config.Config) { c.InlineRowThreshold = 5 })
-	ws := t.TempDir()
+	d := newTestDeps(t, f, func(c *config.Config) { c.MaxRows = 5 })
+
+	out, err := d.runQuery(context.Background(), mustJSON(t, map[string]any{"spl": "index=main"}))
+	if err != nil {
+		t.Fatalf("runQuery: %v", err)
+	}
+	res := out.(jobResult)
+	if res.TotalRows != 12 {
+		t.Errorf("TotalRows = %d, want the exact 12 even though rows were dropped", res.TotalRows)
+	}
+	if res.ReturnedRows != 5 || len(res.Results) != 5 {
+		t.Errorf("returned %d rows (results %d), want 5", res.ReturnedRows, len(res.Results))
+	}
+	if !res.Truncated || res.OmittedRows != 7 {
+		t.Errorf("truncated=%v omitted=%d, want true/7", res.Truncated, res.OmittedRows)
+	}
+	if res.Note == "" {
+		t.Error("a capped result must say how to get the rest")
+	}
+}
+
+// The cap is the caller's to set, because the caller is the one that knows
+// what it can hold. 0 means no cap at all.
+func TestRunQuery_PerCallMaxRows(t *testing.T) {
+	f := &fakeSplunk{rows: 12}
+	d := newTestDeps(t, f, func(c *config.Config) { c.MaxRows = 5 })
 
 	out, err := d.runQuery(context.Background(), mustJSON(t, map[string]any{
-		"spl":            "index=main",
-		"workspace_root": ws,
+		"spl": "index=main", "max_rows": 0,
 	}))
 	if err != nil {
 		t.Fatalf("runQuery: %v", err)
 	}
 	res := out.(jobResult)
-	if res.TotalRows != 12 || res.ReturnedRows != 12 {
-		t.Errorf("TotalRows=%d ReturnedRows=%d, want 12/12", res.TotalRows, res.ReturnedRows)
-	}
-	if res.Results != nil {
-		t.Error("inline results should be empty for file-mediated response")
-	}
-	if len(res.Preview) != previewRowCount {
-		t.Errorf("preview = %d rows, want %d", len(res.Preview), previewRowCount)
-	}
-	if res.ResultsFile == "" {
-		t.Fatal("results_file missing")
-	}
-
-	// The JSONL file holds every row, in order, one JSON object per line.
-	file, err := os.Open(res.ResultsFile)
-	if err != nil {
-		t.Fatalf("open results file: %v", err)
-	}
-	defer file.Close()
-	sc := bufio.NewScanner(file)
-	line := 0
-	for sc.Scan() {
-		var row struct {
-			N int `json:"n"`
-		}
-		if err := json.Unmarshal(sc.Bytes(), &row); err != nil {
-			t.Fatalf("line %d: %v", line, err)
-		}
-		if row.N != line {
-			t.Errorf("line %d has n=%d", line, row.N)
-		}
-		line++
-	}
-	if line != 12 {
-		t.Errorf("results file has %d lines, want 12", line)
-	}
-}
-
-func TestRunQuery_WorkspaceRequired(t *testing.T) {
-	f := &fakeSplunk{rows: 500}
-	d := newTestDeps(t, f, nil) // default threshold 100
-
-	_, err := d.runQuery(context.Background(), mustJSON(t, map[string]any{"spl": "index=main"}))
-	te := asToolErr(t, err)
-	if te.Code != toolerr.CodeWorkspaceRequired {
-		t.Fatalf("code = %q, want workspace_required", te.Code)
-	}
-	if te.Details["total_rows"] != 500 {
-		t.Errorf("details.total_rows = %v", te.Details["total_rows"])
-	}
-	if te.Details["sid"] == "" {
-		t.Error("details.sid missing — agent needs it to retry via get_results")
-	}
-	// The check fires before any fetch, so no rows were wasted.
-	if f.resultsCalls != 0 {
-		t.Errorf("results endpoint called %d times; want 0", f.resultsCalls)
-	}
-}
-
-func TestRunQuery_GuardBlocks(t *testing.T) {
-	f := &fakeSplunk{}
-	d := newTestDeps(t, f, nil)
-
-	_, err := d.runQuery(context.Background(), mustJSON(t, map[string]any{
-		"spl": "index=main | delete",
-	}))
-	te := asToolErr(t, err)
-	if te.Code != toolerr.CodeUnsafeSPL {
-		t.Fatalf("code = %q, want unsafe_spl", te.Code)
-	}
-	if f.lastSPL != "" {
-		t.Error("blocked SPL must never reach Splunk")
+	if res.Truncated || len(res.Results) != 12 {
+		t.Errorf("max_rows 0 must return everything, got %d rows truncated=%v", len(res.Results), res.Truncated)
 	}
 }
 
@@ -471,7 +425,7 @@ func TestGetUsage(t *testing.T) {
 		t.Fatalf("expected one text content block, got %+v", rr.Content)
 	}
 	text := rr.Content[0].Text
-	for _, want := range []string{"run_query", "start_query", "check_job", "get_results", "cancel_job", "workspace_required"} {
+	for _, want := range []string{"run_query", "start_query", "check_job", "get_results", "cancel_job", "max_rows"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("usage text missing %q", want)
 		}

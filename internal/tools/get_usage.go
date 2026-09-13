@@ -24,14 +24,14 @@ func (d *deps) getUsage(ctx context.Context, args json.RawMessage) (any, error) 
 	if len(d.cfg.AllowCommands) > 0 {
 		allow = strings.Join(d.cfg.AllowCommands, ", ")
 	}
-	text := fmt.Sprintf(usageTemplate, host, d.cfg.InlineRowThreshold, previewRowCount, allow)
+	text := fmt.Sprintf(usageTemplate, host, d.cfg.MaxRows, allow)
 	return mcpserver.RawResult{
 		Content: []mcpserver.ContentBlock{{Type: "text", Text: text}},
 	}, nil
 }
 
 // usageTemplate is the get_usage document. Verb placeholders: host,
-// inline_row_threshold, preview row count, allow_commands.
+// max_rows, allow_commands.
 const usageTemplate = `# splunk-mcp usage
 
 Local MCP server for Splunk data analysis over the REST API. One server
@@ -75,15 +75,17 @@ Saved searches:
 Long-running search:
 1. start_query {"spl": "..."} -> sid
 2. check_job {"sid": "..."} until is_done
-3. get_results {"sid": "..."} (page with offset/count, or pass workspace_root)
+3. get_results {"sid": "..."} (page with offset/count)
 
-Large result sets (file mediation):
-- Results with more rows than the inline threshold (currently %d) are NOT
-  truncated — pass workspace_root (absolute path) and the full set is written
-  as a JSONL file (one JSON object per line). The response carries
-  results_file, a %d-row head preview, and the exact total_rows.
-- The JSONL file can be loaded directly into data-toolbox-mcp for further
-  analysis (load_data with format jsonl).
+Large result sets:
+- Results are returned in the response, up to max_rows (default %d; 0 means no
+  cap). This server does not write them to a file: it cannot know your context
+  window, and a runtime that needs a large response on disk already puts it
+  there for you.
+- Nothing is ever cut silently. When the cap drops rows the response carries
+  truncated, omitted_rows, and an exact total_rows — the count is the product.
+- To work through a set larger than you want in one answer, page with
+  get_results offset/count, or narrow the search.
 
 ## Guard
 

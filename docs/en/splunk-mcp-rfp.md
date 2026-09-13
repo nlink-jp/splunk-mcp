@@ -35,10 +35,20 @@ Discovery tools added in Phase 2:
 
 ### Input / Output
 
-- Input: SPL string, time range (earliest / latest, Splunk time modifier format), app context, row threshold, workspace_root
-- Output (two delivery modes):
-  - Results at or below the threshold (default 100 rows, adjustable via config / tool argument) → inline JSON
-  - Above the threshold → **all** rows written as JSONL under `workspace_root`; returns the `results_file` path + head preview + exact count (no truncation; the file can be fed directly into data-toolbox-mcp for further analysis)
+- Input: SPL string, time range (earliest / latest, Splunk time modifier format), app context, `max_rows` (**revised 2026-09-13**: replaces the old `workspace_root` + row threshold)
+- Output: results in the response, capped at `max_rows` (default 50,000; a call
+  may set its own, 0 means no cap)
+  - Above the cap → the excess is dropped from the response and reported as
+    `truncated` + `omitted_rows`, beside an exact `total_rows` (**never a quiet
+    cut**)
+
+> **Revised 2026-09-13 (a scope decision changed)**: file-mediated delivery is
+> withdrawn. A server cannot know the caller's context window, and a threshold,
+> a destination and a read-back path per server means the whole fleet
+> reimplements the same mechanism (owner's decision 2026-09-06, bigquery-mcp RFP
+> Item 2). Putting a large response on disk is the agent runtime's job
+> (gem-agent ADR-0058 intake). What stays here is the explicit cap and the count
+> of what it dropped.
 - Tool errors are structured JSON (`{code, message}`, nlink-jp MCP convention)
 
 ### Configuration
@@ -81,7 +91,7 @@ inline_row_threshold = 100
 ## 3. Design Decisions
 
 - **Language: Go** — reuses splunk-cli assets (REST client, auth, prepend normalization) and rides the same build/signing/release infrastructure as existing nlink-jp MCP servers
-- **Skeleton: ported from data-toolbox-mcp** — the standard procedure for new MCP servers (get_usage, structured errors, file-mediated pattern)
+- **Skeleton: ported from data-toolbox-mcp** — the standard procedure for new MCP servers (get_usage, structured errors; the file-mediated pattern it also carried is withdrawn, see the 2026-09-13 revision)
 - **Code sharing with splunk-cli: copy-port** — copy splunk-cli's internal packages into splunk-mcp and maintain independently. Immediately actionable, independent release cadence. The REST layer is stable, so drift risk is low (a shared library was rejected: synchronized releases across three repos are not worth the cost)
 - **Multi-instance: config-path switching** — one instance = one destination, distinguished by MCP registration name. No profile mechanism or `profile` tool argument (keeps the tool surface simple and makes SID-to-instance mapping self-evident)
 - **Safety guard: block destructive commands only** — write/delete commands such as `| delete`, `| collect`, `| outputlookup` are rejected by default, individually allowable via config. Read/analysis commands are unrestricted. The official app's safe_spl allowlist is a multi-tenant design whose maintenance cost is unjustified for single-user use. The last line of defense is Splunk-side RBAC (the token's role permissions)
@@ -96,7 +106,7 @@ Complementary relationships: splunk-cli (human, hands-on) and splunk-mcp (agent-
 - Port the MCP skeleton from data-toolbox-mcp; copy-port the REST client / auth / prepend normalization from splunk-cli
 - Six core tools (run_query / start_query / check_job / get_results / cancel_job / get_usage)
 - Asynchronous job pattern (create job → poll → exact count → paginated full retrieval)
-- File-mediated delivery (threshold, JSONL dump, preview)
+- ~~File-mediated delivery (threshold, JSONL dump, preview)~~ → withdrawn 2026-09-13, replaced by the explicit `max_rows` cap
 - Destructive-command guard
 - Tests: mock HTTP server validating the REST layer, job lifecycle, guard, and threshold branching
 
@@ -140,6 +150,6 @@ Reason: nlink-jp MCP servers (data-toolbox-mcp, voice-studio-mcp, pcap-analyzer-
 - **Tool name**: splunk-mcp (shortest name pairing with splunk-cli; survives scope expansion). splunk-search-mcp / splunk-query-mcp rejected
 - **Scope**: full configuration — query-execution core plus metadata discovery and saved-search execution (discovery split into Phase 2)
 - **Safety guard**: "block destructive only" adopted. "No guard (rely on RBAC)" and "read-only allowlist" rejected (the latter inherits the official app's allowlist maintenance-cost problem)
-- **Result delivery**: threshold branching (inline / file-mediated) adopted. "Always write to file" rejected due to overhead on small results
+- **Result delivery**: threshold branching (inline / file-mediated) adopted; **withdrawn 2026-09-13** in favour of an explicit `max_rows` cap with the omission counted, because file mediation belongs to the runtime. "Always write to file" was rejected at the time due to overhead on small results
 - **Job API version**: changed from v2 (`search/v2/jobs`) to v1 (`services/search/jobs`) during Phase 1 implementation, preferring the paths splunk-cli has proven in production and removing the Splunk 9.x-only constraint
 - **Multi-instance**: a profile design (`[profiles.<name>]` + `profile` tool argument) was initially proposed, but the user decided on **config-path switching (one MCP instance = one destination)** — destinations distinguished by MCP registration name, keeping the tool surface simple

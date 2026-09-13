@@ -18,8 +18,8 @@ splunk-mcp はすべての検索を**非同期 Splunk ジョブ**として実行
 ページング取得）。これにより:
 
 - `total_rows` は常に確定した最終件数 — プレビューや近似値は一切なし
-- 大規模な結果は**決して切り捨てない**: 呼び出し側指定の `workspace_root`
-  配下に JSONL ファイルとして全件書き出し、先頭プレビューを添付
+- 大規模な結果を**黙って切らない**: `max_rows` を超えた行はレスポンスから外し、
+  外した件数と確定 `total_rows` を添えて返す
 - 長時間検索もタイムアウトしない: `run_query` は `wait_timeout` 時に SID を
   返し、ジョブはサーバー側で実行継続
 - Splunk 側へのアプリインストール不要 — トークンだけで接続可能
@@ -41,12 +41,15 @@ splunk-mcp はすべての検索を**非同期 Splunk ジョブ**として実行
 
 ### 結果の返し方
 
-インライン閾値（デフォルト 100 行）以下の結果はそのまま JSON で返します。
-超えた場合は**全行**を JSONL ファイル（1 行 1 JSON オブジェクト）として
-`workspace_root` 配下に書き出し、レスポンスにはファイルパス・先頭 5 行の
-プレビュー・確定 `total_rows` を含めます。書き出したファイルは
-[data-toolbox-mcp](https://github.com/nlink-jp/data-toolbox-mcp) にそのまま
-読み込んで分析を継続できます。
+結果はレスポンスで返します。上限は `max_rows`（既定 50,000。呼び出しごとに
+指定でき、0 は無制限）。上限で行を落としたときは `truncated`・`omitted_rows`・
+確定 `total_rows` を添えます —— 件数の正確さがこのサーバーの product なので、
+打ち切られた結果も「全体についての答え」であり続けます。1 回で持ちきれない量は
+`get_results` の `offset`/`count` でページングしてください。
+
+**このサーバーは結果をファイルに書きません。** 呼び出し側のコンテキスト窓を
+サーバーは知り得ないためで、大きなレスポンスをディスクへ退避するのは
+エージェントランタイムの仕事です（gem-agent は自動で行います）。
 
 ### SPL ガード
 
@@ -92,7 +95,7 @@ token = "your-token"
 # prepend  = "pipe-only"    # auto | pipe-only | off（splunk-cli と同じ3モード）
 
 [server]
-# inline_row_threshold = 100
+# max_rows = 50000
 # job_ttl              = "10m"
 # allow_commands       = []
 ```
@@ -122,8 +125,8 @@ splunk-mcp --version
 - **クイック分析** — `run_query` に SPL を渡す。`wait_seconds`（デフォルト
   300 秒）以内に完了すれば確定件数付きで結果が返る。
 - **長時間検索** — `start_query` → `check_job` をポーリング → `get_results`。
-- **大規模結果** — `workspace_root`（絶対パス）を渡すと全件が JSONL ファイル
-  + プレビューで届く。行が失われることはない。
+- **大規模結果** — コンテキストに収まるなら `max_rows` を引き上げ、収まらない
+  なら `get_results` の `offset`/`count` でページング。黙って落ちることはない。
 - **保存済みサーチ** — `list_saved_searches` → `run_saved_search`（時間窓の
   上書き可。アラートアクションは常に抑止）。
 

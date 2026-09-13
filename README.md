@@ -20,8 +20,8 @@ poll until `DONE` → read the final `resultCount` → page through
 
 - `total_rows` is always the exact final count — never a preview, never an
   approximation
-- Large result sets are **never truncated**: they are written as a JSONL
-  file under a caller-supplied `workspace_root`, with a head preview inline
+- Large result sets are **never cut silently**: rows beyond `max_rows` are
+  dropped from the response and counted, next to an exact `total_rows`
 - Long searches don't time out: `run_query` returns a SID on `wait_timeout`
   and the job keeps running server-side
 - No app installation on the Splunk side — a token is all you need
@@ -43,12 +43,16 @@ poll until `DONE` → read the final `resultCount` → page through
 
 ### Result delivery
 
-Results at or below the inline threshold (default 100 rows) are returned
-inline as JSON. Above it, **all** rows are written as a JSONL file (one JSON
-object per line) under `workspace_root`, and the response carries the file
-path, a 5-row preview, and the exact `total_rows`. The file loads directly
-into [data-toolbox-mcp](https://github.com/nlink-jp/data-toolbox-mcp) for
-further analysis.
+Results come back in the response, up to `max_rows` (default 50,000; a call
+may set its own, and 0 means no cap). When the cap drops rows, the response
+says so with `truncated`, `omitted_rows`, and the exact `total_rows` — the
+count is the product, so a capped answer is still an answer about the whole
+set. To work through more than one answer can hold, page with `get_results`
+`offset`/`count`.
+
+This server does not write results to a file it chose. It cannot know the
+caller's context window, and an agent runtime that needs a large response on
+disk already puts it there (gem-agent does this automatically).
 
 ### SPL guard
 
@@ -95,7 +99,7 @@ token = "your-token"
 # prepend  = "pipe-only"    # auto | pipe-only | off (same as splunk-cli)
 
 [server]
-# inline_row_threshold = 100
+# max_rows = 50000
 # job_ttl              = "10m"
 # allow_commands       = []
 ```
@@ -125,8 +129,8 @@ Typical agent workflows:
 - **Quick analysis** — `run_query` with SPL; completes within `wait_seconds`
   (default 300) and returns exact counts.
 - **Long-running search** — `start_query` → poll `check_job` → `get_results`.
-- **Large result set** — pass `workspace_root` (absolute path); the full set
-  arrives as a JSONL file plus preview. No rows are ever dropped.
+- **Large result set** — raise `max_rows` if your context can hold it, or page
+  with `get_results` `offset`/`count`. Nothing is ever dropped silently.
 - **Saved searches** — `list_saved_searches` → `run_saved_search`
   (optionally overriding the dispatch time window; alert actions are always
   suppressed).

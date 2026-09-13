@@ -41,10 +41,15 @@ token = ""
 # prepend = "pipe-only"
 
 [server]
-# Row count at or below which results are returned inline. Above it, results
-# are written as a JSONL file under the caller-supplied workspace_root.
-# 0 = always file-mediate.
-# inline_row_threshold = 100
+# Cap on the rows a single result may carry. Rows beyond it are dropped from
+# the response and counted (truncated + omitted_rows); total_rows stays exact.
+# A call can override it with its own max_rows. 0 = no cap.
+#
+# This replaces inline_row_threshold, which decided when to write results to a
+# file. This server no longer does that: it cannot know the caller's context
+# window, and a runtime that needs a large response on disk already puts it
+# there. A config still carrying the old key fails at startup.
+# max_rows = 50000
 
 # Keep completed jobs alive for this long so results stay retrievable
 # (sent as the job's TTL at creation; Splunk's default is a few minutes).

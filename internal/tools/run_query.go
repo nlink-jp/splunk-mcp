@@ -14,9 +14,9 @@ var runQueryTool = mcpserver.Tool{
 	Name: "run_query",
 	Description: "Run a SPL search and wait for completion. Uses Splunk's asynchronous job API " +
 		"(never oneshot/preview), so total_rows is always the exact final count. " +
-		"Small result sets are returned inline; larger ones are written as a JSONL file under " +
-		"workspace_root with a head preview. For searches expected to run long, prefer " +
-		"start_query + check_job + get_results.",
+		"Rows come back in the response, capped by max_rows; what the cap leaves out is " +
+		"counted in omitted_rows and total_rows stays exact. This server writes no files. " +
+		"For searches expected to run long, prefer start_query + check_job + get_results.",
 	InputSchema: json.RawMessage(`{
 		"type": "object",
 		"properties": {

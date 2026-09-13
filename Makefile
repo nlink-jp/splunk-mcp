@@ -66,13 +66,21 @@ verify-release:
 		rm -rf "$$tmp"
 	@echo "verify-release: OK ($(VERSION), notarization marker present)"
 
-## test: Run all unit tests
+## test: Run all unit tests (and type-check the tagged suites)
 test:
 	go test ./...
+	@$(MAKE) --no-print-directory vet-tags
 
 ## vet: Run go vet
 vet:
 	go vet ./...
+
+## vet-tags: Type-check the build-tagged test suites.
+## `go test ./...` never compiles them, so a field deleted from a result type
+## leaves them broken until someone runs the live suite months later — which is
+## how the integration tests survived the ADR-0004 spill removal uncompilable.
+vet-tags:
+	go vet -tags integration ./...
 
 ## check: vet + test + build
 check: vet test build

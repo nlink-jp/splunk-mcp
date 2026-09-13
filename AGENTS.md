@@ -6,8 +6,9 @@ Local MCP server exposing Splunk search over the REST API. Replaces Splunk's
 official MCP Server app, whose oneshot + 60 s timeout + `| head` injection
 makes row counts unstable. Every search runs as an asynchronous Splunk job
 (create → poll `DONE` → exact `resultCount` → paged retrieval), so counts
-are always exact and large results are file-mediated (JSONL under
-`workspace_root`), never truncated.
+are always exact. Rows come back in the response under an explicit `max_rows`
+cap, and what the cap drops is counted (`truncated`, `omitted_rows`) rather
+than quietly cut — this server writes no result files (ADR-0004).
 
 One server instance = one Splunk host (config-path switching, no profile
 mechanism). RFP: `docs/ja/splunk-mcp-rfp.ja.md`.
@@ -46,7 +47,7 @@ internal/
   spl/                     prepend modes (auto|pipe-only|off) + destructive-command guard
   client/                  Splunk REST client (jobs v1 endpoints)         [ported: splunk-cli, slog + TTL + raw rows]
                            + discovery.go (indexes / saved-search listing, dispatch)
-  tools/                   The 10 MCP tools + JSONL file mediation
+  tools/                   The 10 MCP tools + the max_rows cap and its accounting
 config.example.toml        Template config (one file per Splunk host)
 ```
 

@@ -1,11 +1,11 @@
 // Package tools implements the splunk-mcp MCP tools.
 //
-// Result-delivery contract (shared by run_query and get_results): when the
-// row count is at or below the inline threshold the rows are returned inline;
-// above it, all rows are written as JSONL under the caller-supplied
-// workspace_root and the response carries the file path, a head preview, and
-// the exact total. There is deliberately no truncation path — the exact-count
-// guarantee is the reason this server exists.
+// Result-delivery contract (shared by run_query and get_results): rows come
+// back in the response, capped by max_rows, and what the cap leaves out is
+// counted in omitted_rows while total_rows stays exact. This server writes no
+// result files: it cannot know the caller's context window, so file-ising a
+// large response is the runtime's job (ADR-0004, organization ADR-021). The
+// exact count is the guarantee that survives — it is why this server exists.
 package tools
 
 import (

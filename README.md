@@ -155,8 +155,8 @@ make integration-test  # start a Splunk container (Podman) and run live E2E test
 make splunk-down       # stop and remove the Splunk test container
 ```
 
-Integration tests run the full lifecycle — exact counts, JSONL file
-mediation, async flow — against a real `splunk/splunk:9.4` container.
+Integration tests run the full lifecycle — exact counts, the `max_rows` cap
+and its accounting, async flow — against a real `splunk/splunk:9.4` container.
 See [BUILD.md](BUILD.md) for details.
 
 ## License

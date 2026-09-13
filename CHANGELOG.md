@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-09-13
+
+### Fixed
+
+- **The tool descriptions and the `get_usage` manual still described the result
+  file that 0.2.0 removed.** `run_query` told the model large results are
+  written as JSONL under `workspace_root`; `get_usage` listed
+  `workspace_required` / `workspace_error` and advised retrying with
+  `workspace_root` or raising `inline_row_threshold` — all of which this server
+  now rejects. The same text in `get_results`, `run_saved_search`, the package
+  doc, `--help`, README and AGENTS is corrected too. What the model is told is
+  now what the server does: rows come back capped by `max_rows`, and the drop is
+  counted.
+- The `workspace_required` and `workspace_error` error codes are gone; nothing
+  could return them.
+- The integration suite (`-tags integration`) did not compile after 0.2.0 —
+  it still referenced `results_file` and the head preview. Its two
+  file-mediation tests are replaced by `TestLive_RunQuery_MaxRowsCap` (the cap
+  reports what it dropped, `total_rows` stays exact) and
+  `TestLive_RunQuery_CapThenPage` (a capped result leaves the job fetchable).
+
+### Added
+
+- `TestModelFacingTextNamesNoRetiredMechanism` — walks every registered tool's
+  description and schema plus the usage manual and fails on a retired term.
+  Prose drifts silently because nothing compiles it; this test compiles it.
+- `make test` now also runs `go vet -tags integration ./...`. `go test ./...`
+  never builds tagged files, which is how a broken live suite went unnoticed.
+
 ## [0.2.0] - 2026-09-13
 
 ### Changed

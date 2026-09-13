@@ -11,7 +11,7 @@ import (
 var getResultsTool = mcpserver.Tool{
 	Name: "get_results",
 	Description: "Fetch results of a completed job. Defaults to all rows; use offset/count to page. " +
-		"The same inline-vs-file contract as run_query applies to the fetched slice.",
+		"The fetched slice is capped by max_rows the same way run_query's is.",
 	InputSchema: json.RawMessage(`{
 		"type": "object",
 		"properties": {

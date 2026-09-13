@@ -106,8 +106,6 @@ authority.
 | job_not_found | SID expired (TTL) or wrong | Re-run the search; consider [server] job_ttl in config |
 | job_failed | Splunk reported FAILED | Read error_messages in details; fix the SPL |
 | saved_search_not_found | Unknown saved-search name | list_saved_searches for exact names (namespace-sensitive) |
-| workspace_required | Result exceeds inline threshold, no workspace_root | Retry with workspace_root (absolute path), raise inline_row_threshold, or page with get_results offset/count |
-| workspace_error | Could not write results file | Check the workspace_root path/permissions |
 | splunk_api_error | HTTP/auth/network failure | Check host, token validity, and network; details are in the message |
 
 ## Constraints worth knowing

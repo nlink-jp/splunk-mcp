@@ -65,10 +65,10 @@ SPLUNK_HOST="https://your-splunk:8089" SPLUNK_TOKEN="..." \
 Coverage highlights on the tools side (`tools_integration_test.go`):
 
 - `TestLive_RunQuery_ExactCountInline` — the exact-count guarantee end to end
-- `TestLive_RunQuery_FileMediated` — every generated row lands in the JSONL
-  file (no truncation)
-- `TestLive_RunQuery_WorkspaceRequired` — pre-fetch guard, then paging the
-  same SID via `get_results`
+- `TestLive_RunQuery_MaxRowsCap` — a result past the cap comes back capped,
+  with `truncated` / `omitted_rows` set and `total_rows` still exact
+- `TestLive_RunQuery_CapThenPage` — a capped result leaves the job fetchable,
+  so the dropped rows stay reachable via `get_results`
 - `TestLive_AsyncFlow` — `start_query` → `check_job` → `get_results`
 - `TestLive_CancelJob`, `TestLive_JobFailed`
 

@@ -3,9 +3,7 @@
 package tools
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -60,15 +58,15 @@ func TestLive_RunQuery_ExactCountInline(t *testing.T) {
 	}
 }
 
-// TestLive_RunQuery_FileMediated verifies the no-truncation contract on a
-// real Splunk: every generated row must land in the JSONL file.
-func TestLive_RunQuery_FileMediated(t *testing.T) {
+// TestLive_RunQuery_MaxRowsCap is the replacement for the old file-mediation
+// E2E (ADR-0004 withdrew the spill): a result past the cap comes back capped,
+// and the drop is reported instead of being hidden or written to a file.
+func TestLive_RunQuery_MaxRowsCap(t *testing.T) {
 	d := liveDeps(t, func(c *config.Config) { c.MaxRows = 10 })
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	ws := t.TempDir()
 
-	const want = 250
+	const total = 250
 	out, err := d.runQuery(ctx, mustJSON(t, map[string]any{
 		"spl": `| makeresults count=250 | streamstats count as n | fields n`,
 	}))
@@ -76,64 +74,53 @@ func TestLive_RunQuery_FileMediated(t *testing.T) {
 		t.Fatalf("runQuery: %v", err)
 	}
 	res := out.(jobResult)
-	if res.TotalRows != want || res.ReturnedRows != want {
-		t.Errorf("total=%d returned=%d, want %d", res.TotalRows, res.ReturnedRows, want)
+	// The exact count is the guarantee that survives the cap.
+	if res.TotalRows != total {
+		t.Errorf("total_rows = %d, want %d — the exact count must survive the cap", res.TotalRows, total)
 	}
-	if res.ResultsFile == "" {
-		t.Fatal("results_file missing")
+	if res.ReturnedRows != 10 || len(res.Results) != 10 {
+		t.Errorf("returned=%d inline=%d, want 10/10", res.ReturnedRows, len(res.Results))
 	}
-	if len(res.Preview) != previewRowCount {
-		t.Errorf("preview = %d rows, want %d", len(res.Preview), previewRowCount)
+	if !res.Truncated || res.OmittedRows != total-10 {
+		t.Errorf("truncated=%v omitted=%d, want true/%d — a quiet cut is the one thing forbidden",
+			res.Truncated, res.OmittedRows, total-10)
 	}
-
-	f, err := os.Open(res.ResultsFile)
-	if err != nil {
-		t.Fatalf("open results file: %v", err)
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	lines := 0
-	for sc.Scan() {
-		var row map[string]any
-		if err := json.Unmarshal(sc.Bytes(), &row); err != nil {
-			t.Fatalf("line %d not valid JSON: %v", lines, err)
-		}
-		lines++
-	}
-	if lines != want {
-		t.Errorf("results file has %d lines, want %d — truncation would be a design regression", lines, want)
+	if res.Note == "" {
+		t.Error("note missing: the drop must be stated in words too")
 	}
 }
 
-// TestLive_RunQuery_WorkspaceRequired checks the pre-fetch guard and that the
-// job stays fetchable afterwards via get_results.
-func TestLive_RunQuery_WorkspaceRequired(t *testing.T) {
+// TestLive_RunQuery_CapThenPage checks that a capped result leaves the job
+// fetchable, so the rows the cap dropped are still reachable through paging.
+func TestLive_RunQuery_CapThenPage(t *testing.T) {
 	d := liveDeps(t, func(c *config.Config) { c.MaxRows = 5 })
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	_, err := d.runQuery(ctx, mustJSON(t, map[string]any{
+	out, err := d.runQuery(ctx, mustJSON(t, map[string]any{
 		"spl": `| makeresults count=20 | streamstats count as n | fields n`,
 	}))
-	te := asToolErr(t, err)
-	if te.Code != toolerr.CodeWorkspaceRequired {
-		t.Fatalf("code = %q, want workspace_required", te.Code)
-	}
-	sid, _ := te.Details["sid"].(string)
-	if sid == "" {
-		t.Fatal("details.sid missing")
-	}
-
-	// The job is still alive — page a slice inline within the threshold.
-	out, err := d.getResults(ctx, mustJSON(t, map[string]any{
-		"sid": sid, "offset": 0, "count": 5,
-	}))
 	if err != nil {
-		t.Fatalf("getResults after workspace_required: %v", err)
+		t.Fatalf("runQuery: %v", err)
 	}
 	res := out.(jobResult)
-	if res.TotalRows != 20 || res.ReturnedRows != 5 {
-		t.Errorf("total=%d returned=%d, want 20/5", res.TotalRows, res.ReturnedRows)
+	if !res.Truncated || res.TotalRows != 20 || res.ReturnedRows != 5 {
+		t.Fatalf("truncated=%v total=%d returned=%d, want true/20/5", res.Truncated, res.TotalRows, res.ReturnedRows)
+	}
+	if res.SID == "" {
+		t.Fatal("sid missing: without it the dropped rows are unreachable")
+	}
+
+	// The job is still alive — page the next slice from the same SID.
+	out, err = d.getResults(ctx, mustJSON(t, map[string]any{
+		"sid": res.SID, "offset": 5, "count": 5,
+	}))
+	if err != nil {
+		t.Fatalf("getResults after a capped run_query: %v", err)
+	}
+	page := out.(jobResult)
+	if page.TotalRows != 20 || page.ReturnedRows != 5 {
+		t.Errorf("total=%d returned=%d, want 20/5", page.TotalRows, page.ReturnedRows)
 	}
 }
 

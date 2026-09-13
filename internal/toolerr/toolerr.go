@@ -68,6 +68,4 @@ const (
 	CodeJobNotDone          = "job_not_done"
 	CodeJobFailed           = "job_failed"
 	CodeWaitTimeout         = "wait_timeout"
-	CodeWorkspaceRequired   = "workspace_required"
-	CodeWorkspaceError      = "workspace_error"
 )

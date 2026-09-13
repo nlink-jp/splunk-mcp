@@ -12,8 +12,9 @@ var rootCmd = &cobra.Command{
 	Long: `splunk-mcp exposes Splunk search over the REST API as a local MCP server.
 
 Searches run as asynchronous Splunk jobs (never oneshot/preview), so result
-counts are always exact and large result sets are delivered as JSONL files
-instead of being truncated.
+counts are always exact. Rows come back in the response under an explicit
+max_rows cap, with everything the cap leaves out counted rather than silently
+dropped; this server writes no result files.
 
 One server instance connects to one Splunk host; register the binary multiple
 times with different --config paths for multiple destinations.

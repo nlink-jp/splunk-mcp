@@ -14,7 +14,7 @@ import (
 var runSavedSearchTool = mcpserver.Tool{
 	Name: "run_saved_search",
 	Description: "Dispatch a saved search by name, wait for completion, and return results under " +
-		"the same exact-count / file-mediation contract as run_query. Alert actions are never " +
+		"the same exact-count / max_rows contract as run_query. Alert actions are never " +
 		"triggered. The saved SPL is server-defined and runs as-is (the destructive-command guard " +
 		"applies only to ad-hoc SPL).",
 	InputSchema: json.RawMessage(`{

@@ -15,7 +15,7 @@ NOTARY_PROFILE    ?= nlink-jp-notary
 # darwin ships arm64 only (no amd64, no universal). linux/windows keep their matrix.
 PLATFORMS := darwin/arm64 linux/amd64 linux/arm64 windows/amd64
 
-.PHONY: build build-all package verify-release test vet check clean help \
+.PHONY: build build-all package verify-release test vet vet-tags check clean help \
 	splunk-up splunk-down integration-test
 
 ## build: Build binary for the current OS/Arch → ./dist/splunk-mcp

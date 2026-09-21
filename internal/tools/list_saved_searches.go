@@ -12,7 +12,7 @@ var listSavedSearchesTool = mcpserver.Tool{
 	Name: "list_saved_searches",
 	Description: "List saved searches visible in the configured app/owner namespace, with their SPL " +
 		"and schedule. Run one with run_saved_search.",
-	InputSchema: json.RawMessage(`{"type": "object", "properties": {}}`),
+	InputSchema: json.RawMessage(`{"type": "object", "properties": {}, "additionalProperties": false}`),
 }
 
 func (d *deps) listSavedSearches(ctx context.Context, args json.RawMessage) (any, error) {

@@ -84,6 +84,26 @@ config.example.toml        Template config (one file per Splunk host)
 - run_saved_search always sends `trigger_actions=0` (an analysis tool must
   never fire alert actions) and escapes the name with url.PathEscape —
   url.JoinPath would treat an embedded "/" as a path separator.
+- **Every tool schema sets `additionalProperties: false`** (organization
+  ADR-021 §10). The schemas here are ten separate JSON literals with no
+  shared builder, so a new tool must add the key by hand —
+  `TestEveryToolSchemaIsClosed` (`internal/tools/schema_test.go`) is what
+  catches the omission, and it reads the schemas off a real `tools/list`
+  driven through `Register`, not from the literals.
+- **The server side is still lax, deliberately for now.** `parseArgs` uses
+  plain `json.Unmarshal`, so an unknown argument that arrives anyway is
+  accepted and ignored — a misspelled `max_rows` falls back to the config
+  default while looking like it took effect, which undercuts the exact-count
+  guarantee this server exists for. `TestParseArgsAcceptsUnknownFields` pins
+  that so the gap is visible in code. Adding `DisallowUnknownFields` turns a
+  silently-ignored argument into an error for existing callers, so it is a
+  behaviour change to decide on its own; invert that test when it is made.
+- **`contract_test.go`'s `allTools()` is a hand-written copy of the registry.**
+  A tool registered in `tools.go` but missing from that list is exempt from
+  every assertion in `contract_test.go` with nothing failing.
+  `TestContractToolListMatchesTheRegistry` now pins the two together in both
+  directions; prefer deriving from `registeredTools` for any new list-walking
+  test rather than extending `allTools()`.
 
 ## Release
 

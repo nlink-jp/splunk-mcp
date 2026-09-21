@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- All ten MCP tool schemas now set `additionalProperties: false`, as
+  organization ADR-021 §10 requires, so a client validating arguments against
+  the schema refuses a mistyped parameter instead of forwarding it. The
+  schemas are separate JSON literals with no shared builder, so the key was
+  added to each; `TestEveryToolSchemaIsClosed` catches the next omission and
+  reads the schemas off a real `tools/list` driven through `Register`.
+
+### Added
+
+- `TestContractToolListMatchesTheRegistry` — `contract_test.go` asserts schema
+  shape over a hand-written `allTools()`, and a tool registered in `tools.go`
+  but missing from that list was exempt from every assertion there with
+  nothing failing. The two are now pinned together in both directions.
+- `TestParseArgsAcceptsUnknownFields` — records that `parseArgs` decodes with
+  plain `json.Unmarshal`, so an unknown argument reaching the server is
+  accepted and ignored (a misspelled `max_rows` silently uses the default).
+  The closed schemas bind validating clients only. Rejecting it server-side
+  would change what existing callers get back, so it is a separate decision.
+
 ## [0.2.2] - 2026-09-14
 
 ### Added

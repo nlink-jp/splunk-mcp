@@ -12,7 +12,7 @@ import (
 var getUsageTool = mcpserver.Tool{
 	Name:        "get_usage",
 	Description: "Full tool reference for splunk-mcp: workflow, result-delivery contract, and error-recovery table. Call this before your first query.",
-	InputSchema: json.RawMessage(`{"type": "object", "properties": {}}`),
+	InputSchema: json.RawMessage(`{"type": "object", "properties": {}, "additionalProperties": false}`),
 }
 
 func (d *deps) getUsage(ctx context.Context, args json.RawMessage) (any, error) {

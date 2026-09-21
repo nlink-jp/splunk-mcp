@@ -12,7 +12,7 @@ var listIndexesTool = mcpserver.Tool{
 	Name: "list_indexes",
 	Description: "List the event indexes visible to the configured credentials, with event counts " +
 		"and event-time bounds. Use before writing SPL to learn what data exists.",
-	InputSchema: json.RawMessage(`{"type": "object", "properties": {}}`),
+	InputSchema: json.RawMessage(`{"type": "object", "properties": {}, "additionalProperties": false}`),
 }
 
 func (d *deps) listIndexes(ctx context.Context, args json.RawMessage) (any, error) {

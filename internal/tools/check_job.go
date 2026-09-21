@@ -19,7 +19,8 @@ var checkJobTool = mcpserver.Tool{
 		"properties": {
 			"sid": {"type": "string", "description": "Search job SID from start_query or run_query."}
 		},
-		"required": ["sid"]
+		"required": ["sid"],
+		"additionalProperties": false
 	}`),
 }
 

@@ -16,7 +16,8 @@ var cancelJobTool = mcpserver.Tool{
 		"properties": {
 			"sid": {"type": "string", "description": "Search job SID to cancel."}
 		},
-		"required": ["sid"]
+		"required": ["sid"],
+		"additionalProperties": false
 	}`),
 }
 

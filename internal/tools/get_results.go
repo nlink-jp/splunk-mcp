@@ -20,7 +20,8 @@ var getResultsTool = mcpserver.Tool{
 			"count": {"type": "integer", "description": "Rows to fetch from offset (default 0 = all remaining)."},
 			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
 		},
-		"required": ["sid"]
+		"required": ["sid"],
+		"additionalProperties": false
 	}`),
 }
 

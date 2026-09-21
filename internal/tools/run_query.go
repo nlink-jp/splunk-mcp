@@ -26,7 +26,8 @@ var runQueryTool = mcpserver.Tool{
 			"wait_seconds": {"type": "number", "description": "Max seconds to wait for completion (default 300). On timeout the job keeps running; poll check_job."},
 			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
 		},
-		"required": ["spl"]
+		"required": ["spl"],
+		"additionalProperties": false
 	}`),
 }
 

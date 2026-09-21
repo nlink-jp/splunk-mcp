@@ -19,7 +19,8 @@ var startQueryTool = mcpserver.Tool{
 			"earliest_time": {"type": "string", "description": "Search window start, Splunk time modifier."},
 			"latest_time": {"type": "string", "description": "Search window end, Splunk time modifier."}
 		},
-		"required": ["spl"]
+		"required": ["spl"],
+		"additionalProperties": false
 	}`),
 }
 

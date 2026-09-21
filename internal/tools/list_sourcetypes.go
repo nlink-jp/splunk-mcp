@@ -23,7 +23,8 @@ var listSourcetypesTool = mcpserver.Tool{
 			"earliest_time": {"type": "string", "description": "Window start, Splunk time modifier (default: index lifetime)."},
 			"latest_time": {"type": "string", "description": "Window end, Splunk time modifier."},
 			"max_rows": {"type": "integer", "description": "Cap on rows returned by this call (default from config, 50000; 0 means no cap). Rows beyond it are dropped from the response and counted in omitted_rows \u2014 total_rows stays exact. Set it to what your context can hold."}
-		}
+		},
+		"additionalProperties": false
 	}`),
 }
 

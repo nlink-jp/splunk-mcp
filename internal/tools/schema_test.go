@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,8 +68,8 @@ func registeredTools(t *testing.T) []listedTool {
 // additionalProperties:false, so a client validating arguments against the
 // schema refuses a mistyped parameter instead of sending it on.
 //
-// This covers the client half only. The server half is not in place here;
-// TestParseArgsAcceptsUnknownFields records that.
+// This covers the client half only. The server half — the decoder that refuses
+// a typo a client forwarded anyway — is TestEveryToolRefusesAnUnknownArgument.
 func TestEveryToolSchemaIsClosed(t *testing.T) {
 	tools := registeredTools(t)
 	// Vacuity guard: with an empty list every assertion below passes without
@@ -129,33 +131,144 @@ func TestContractToolListMatchesTheRegistry(t *testing.T) {
 	}
 }
 
-// TestParseArgsAcceptsUnknownFields records the half of the contract this
-// server does NOT have, so the gap is visible in code and not only in a
-// report.
+// callTool drives one real tools/call through a server that Register
+// populated, and returns the reply's content text and isError flag.
 //
-// parseArgs decodes with plain json.Unmarshal, without
-// DisallowUnknownFields, so an unknown argument is silently ignored rather
-// than named in an error. The closed schemas above bind clients that validate
-// against them; a client that does not validate — or any caller speaking
-// JSON-RPC directly — still gets its typo accepted, and a misspelled max_rows
-// then falls back to the configured default while looking like it took effect,
-// which is exactly the cap this server exists to make explicit.
+// The client is nil on purpose. Every handler decodes its arguments before it
+// touches Splunk, so a call this test expects to be refused must come back as
+// an error without ever reaching the client — and if that ordering is ever
+// broken, the nil dereference says so loudly instead of the test quietly
+// asserting the wrong thing. Only calls that must be refused go through here.
+func callTool(t *testing.T, name, args string) (string, bool) {
+	t.Helper()
+	req := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":%s}}`+"\n", name, args)
+	in := bytes.NewBufferString(req)
+	var out bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	srv := mcpserver.New("splunk-mcp", "test", transport.NewStdioTransport(in, &out), logger)
+	Register(srv, nil, config.Default(), logger)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Serve(ctx); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	var resp struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+			IsError bool `json:"isError"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("decode tools/call reply %q: %v", out.String(), err)
+	}
+	if len(resp.Result.Content) == 0 {
+		t.Fatalf("tools/call reply carries no content: %s", out.String())
+	}
+	return resp.Result.Content[0].Text, resp.Result.IsError
+}
+
+// TestEveryToolRefusesAnUnknownArgument is the enforcing half of org ADR-021
+// §4. It replaces TestParseArgsAcceptsUnknownFields, which pinned the
+// opposite: that a typo reaching parseArgs was accepted and ignored. Closing
+// that gap is the deliberate behaviour change that test said would be decided
+// on its own, so the test it left behind is inverted here rather than kept
+// beside its contradiction.
 //
-// Closing that gap changes what existing callers get back (a silently-ignored
-// argument becomes an error), so it is a deliberate behaviour change and not
-// part of the schema sweep. When it is made, this test should fail and be
-// replaced by its opposite.
-func TestParseArgsAcceptsUnknownFields(t *testing.T) {
+// The tool list comes from the registry, not from contract_test.go's
+// hand-written allTools(): a tool added to Register but not to that list would
+// otherwise be exempt from this assertion with nothing failing. Every
+// registered tool is covered, including the argument-less ones, because
+// "no arguments" means none rather than any.
+func TestEveryToolRefusesAnUnknownArgument(t *testing.T) {
+	tools := registeredTools(t)
+	// Vacuity guard: with an empty list this test examines nothing.
+	if len(tools) == 0 {
+		t.Fatal("tools/list advertises no tools, so this test proves nothing")
+	}
+	for _, tl := range tools {
+		t.Run(tl.Name, func(t *testing.T) {
+			const field = "no_such_argument"
+			text, isErr := callTool(t, tl.Name, `{"`+field+`":1}`)
+			if !isErr {
+				t.Fatalf("%s accepted an undeclared argument: %s", tl.Name, text)
+			}
+			// The message must name the offending field: a caller told only
+			// "invalid arguments" has to re-read the schema to find its own
+			// typo. Match the decoder's phrasing, not just the field name — a
+			// message naming a required argument can contain it by coincidence.
+			if want := `unknown field \"` + field + `\"`; !strings.Contains(text, want) {
+				t.Errorf("%s: error does not name the offending argument: want %s, got %s", tl.Name, want, text)
+			}
+			if !strings.Contains(text, "invalid_arguments") {
+				t.Errorf("%s: error does not carry the invalid_arguments code: %s", tl.Name, text)
+			}
+		})
+	}
+}
+
+// TestMisspelledMaxRowsIsRefused is the specific case that made this change
+// worth its breakage. max_rows is the caller's cap on a response, and the
+// exact count is what this server exists to give: a dropped `max_rowz` left
+// max_rows unset, so the call silently fell back to the configured default
+// while reading as though the caller's number had been honoured.
+func TestMisspelledMaxRowsIsRefused(t *testing.T) {
+	text, isErr := callTool(t, "get_results", `{"sid":"abc","max_rowz":10}`)
+	if !isErr {
+		t.Fatalf("get_results accepted max_rowz: %s", text)
+	}
+	if !strings.Contains(text, `unknown field \"max_rowz\"`) {
+		t.Errorf("error does not name max_rowz: %s", text)
+	}
+	// And the correct spelling still binds, which is what makes the rejection
+	// above a fix rather than a wall.
 	var a getResultsArgs
-	if err := parseArgs(json.RawMessage(`{"sid":"abc","max_rowz":10}`), &a); err != nil {
-		t.Fatalf("expected the unknown field to be ignored, got an error: %v", err)
+	if err := parseArgs(json.RawMessage(`{"sid":"abc","max_rows":10}`), &a); err != nil {
+		t.Fatalf("the correct spelling was refused: %v", err)
 	}
-	if a.SID != "abc" {
-		t.Fatalf("sid = %q, want abc", a.SID)
+	if a.MaxRows == nil || *a.MaxRows != 10 {
+		t.Fatalf("max_rows did not bind: %v", a.MaxRows)
 	}
-	if a.MaxRows != nil {
-		t.Fatalf("max_rows = %v, want nil: the misspelling should not have bound", *a.MaxRows)
+}
+
+// TestMalformedArgumentsAreRefused pins the other half of the decode: a
+// wrong-typed argument must be refused rather than left at its zero value,
+// which would make the call run as though the argument had been absent.
+func TestMalformedArgumentsAreRefused(t *testing.T) {
+	cases := []struct {
+		name string
+		tool string
+		args string
+	}{
+		{"number for string", "get_results", `{"sid":1}`},
+		{"string for integer", "get_results", `{"sid":"abc","max_rows":"all"}`},
+		{"array for object", "get_results", `["abc"]`},
+		{"number for string", "run_query", `{"query":1}`},
+		{"string for number", "run_query", `{"query":"search index=x","wait_seconds":"forever"}`},
 	}
-	t.Log("unknown field 'max_rowz' was accepted and ignored, and max_rows " +
-		"stayed unset: the closed schema binds validating clients only, not parseArgs")
+	for _, tc := range cases {
+		t.Run(tc.tool+"/"+tc.name, func(t *testing.T) {
+			text, isErr := callTool(t, tc.tool, tc.args)
+			if !isErr {
+				t.Fatalf("%s accepted malformed arguments: %s", tc.tool, text)
+			}
+			if !strings.Contains(text, "invalid arguments") {
+				t.Errorf("%s: error is not a decode error: %s", tc.tool, text)
+			}
+		})
+	}
+}
+
+// TestOmittedArgumentsStillMeanNone pins the boundary of the change: strict
+// decoding must not turn a legitimately argument-less call into an error.
+// Checked at parseArgs, because a tool that gets past the decode goes on to
+// call Splunk.
+func TestOmittedArgumentsStillMeanNone(t *testing.T) {
+	for _, args := range []string{``, `{}`, `null`} {
+		if err := parseArgs(json.RawMessage(args), &struct{}{}); err != nil {
+			t.Errorf("arguments %q were refused: %v", args, err)
+		}
+	}
 }

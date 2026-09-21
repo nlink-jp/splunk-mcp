@@ -16,6 +16,10 @@ var listSavedSearchesTool = mcpserver.Tool{
 }
 
 func (d *deps) listSavedSearches(ctx context.Context, args json.RawMessage) (any, error) {
+	// No arguments — which still means "none", not "any".
+	if err := parseArgs(args, &struct{}{}); err != nil {
+		return nil, err
+	}
 	searches, err := d.client.ListSavedSearches(ctx)
 	if err != nil {
 		return nil, toolerr.Newf(toolerr.CodeSplunkAPI, "list saved searches: %v", err)

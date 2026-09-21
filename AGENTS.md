@@ -90,14 +90,26 @@ config.example.toml        Template config (one file per Splunk host)
   `TestEveryToolSchemaIsClosed` (`internal/tools/schema_test.go`) is what
   catches the omission, and it reads the schemas off a real `tools/list`
   driven through `Register`, not from the literals.
-- **The server side is still lax, deliberately for now.** `parseArgs` uses
-  plain `json.Unmarshal`, so an unknown argument that arrives anyway is
-  accepted and ignored — a misspelled `max_rows` falls back to the config
-  default while looking like it took effect, which undercuts the exact-count
-  guarantee this server exists for. `TestParseArgsAcceptsUnknownFields` pins
-  that so the gap is visible in code. Adding `DisallowUnknownFields` turns a
-  silently-ignored argument into an error for existing callers, so it is a
-  behaviour change to decide on its own; invert that test when it is made.
+- **The server side enforces it too.** `parseArgs` decodes with
+  `json.Decoder.DisallowUnknownFields`, and every handler goes through it —
+  including `list_indexes`, `list_saved_searches` and `get_usage`, which take
+  no arguments, because "none" means none rather than any. **A call carrying
+  an argument a tool does not declare now fails, naming the field, instead of
+  being silently ignored** — the deliberate behaviour change ADR-021 §4
+  requires, made because the closed schemas bind validating clients only and a
+  caller speaking JSON-RPC directly validates nothing. A misspelled `max_rows`
+  used to fall back to the config default while looking like it took effect,
+  which undercut the exact-count guarantee this server exists for.
+  `TestEveryToolRefusesAnUnknownArgument` replaced
+  `TestParseArgsAcceptsUnknownFields`, which had pinned the opposite. Do not
+  add a compatibility shim: an argument name no tool declares has never meant
+  anything.
+- **Every handler decodes before it touches Splunk, and a test depends on it.**
+  `callTool` in `schema_test.go` drives real `tools/call` requests through a
+  server registered with a **nil** client, so a call that must be refused has
+  to come back as an error without reaching Splunk. If that ordering is ever
+  broken the nil dereference panics, which is the intent — put the
+  `parseArgs` call first in a new handler.
 - **`contract_test.go`'s `allTools()` is a hand-written copy of the registry.**
   A tool registered in `tools.go` but missing from that list is exempt from
   every assertion in `contract_test.go` with nothing failing.

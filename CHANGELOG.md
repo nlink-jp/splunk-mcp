@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **An MCP tool call carrying an argument the tool does not declare now fails
+  instead of being quietly ignored.** This is a deliberate behaviour change,
+  required by org ADR-021 §4, and it is the one the previous entry recorded as
+  still outstanding. `max_rows` is what made it costly: until now `max_rowz`
+  was accepted and dropped, so the call fell back to the configured default
+  while reading as though the caller's cap had been honoured — and an exact,
+  explicit row count is the guarantee this server exists to give. All ten
+  tools — including `list_indexes`, `list_saved_searches` and `get_usage`,
+  which take no arguments — now decode with `DisallowUnknownFields` and refuse
+  the call, naming the offending field:
+  `{"code":"invalid_arguments","message":"invalid arguments: json: unknown field \"max_rowz\""}`.
+
+  A malformed argument object is refused the same way, rather than leaving the
+  argument at its zero value and running as though it had been absent.
+
+  Nothing runs before the arguments decode, so a rejected call reaches no
+  Splunk endpoint and starts no search job. Omitting `arguments`, or sending
+  `{}` or `null`, still means "no arguments" and is not an error. There is no
+  compatibility shim: an argument name no tool declares has never meant
+  anything, so the only fix is to correct it.
+
 ### Fixed
 
 - All ten MCP tool schemas now set `additionalProperties: false`, as
@@ -19,11 +42,14 @@ All notable changes to this project will be documented in this file.
   shape over a hand-written `allTools()`, and a tool registered in `tools.go`
   but missing from that list was exempt from every assertion there with
   nothing failing. The two are now pinned together in both directions.
-- `TestParseArgsAcceptsUnknownFields` — records that `parseArgs` decodes with
-  plain `json.Unmarshal`, so an unknown argument reaching the server is
-  accepted and ignored (a misspelled `max_rows` silently uses the default).
-  The closed schemas bind validating clients only. Rejecting it server-side
-  would change what existing callers get back, so it is a separate decision.
+- `TestEveryToolRefusesAnUnknownArgument` — walks the tool list from the
+  registry (not the hand-written `allTools()`) and asserts each tool refuses
+  an undeclared argument and names it. It replaces
+  `TestParseArgsAcceptsUnknownFields`, which pinned the opposite behaviour and
+  said it should be inverted when this change landed.
+- `TestMisspelledMaxRowsIsRefused` and `TestMalformedArgumentsAreRefused` —
+  the specific regression (`max_rowz` silently using the default) and the
+  wrong-typed-argument half, both driven through real `tools/call` requests.
 
 ## [0.2.2] - 2026-09-14
 

@@ -16,6 +16,10 @@ var listIndexesTool = mcpserver.Tool{
 }
 
 func (d *deps) listIndexes(ctx context.Context, args json.RawMessage) (any, error) {
+	// No arguments — which still means "none", not "any".
+	if err := parseArgs(args, &struct{}{}); err != nil {
+		return nil, err
+	}
 	indexes, err := d.client.ListIndexes(ctx)
 	if err != nil {
 		return nil, toolerr.Newf(toolerr.CodeSplunkAPI, "list indexes: %v", err)

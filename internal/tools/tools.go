@@ -9,6 +9,7 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -118,11 +119,28 @@ func (d *deps) shapeResults(sid string, rows []json.RawMessage, total, offset, m
 	return res
 }
 
+// parseArgs decodes a tool's arguments strictly: an argument the tool does not
+// declare is refused by name. Every tool decodes through here, including the
+// ones that take no arguments — "none" still means none, not any.
+//
+// The closed `additionalProperties: false` on each descriptor's InputSchema is
+// only the declared half of org ADR-021 §4 — what a schema-checking client
+// refuses before the call. This is the half that actually refuses, and it is
+// needed because not every client checks the schema and a caller speaking
+// JSON-RPC directly checks nothing. Without it a misspelt `max_rows` left the
+// cap unbound and the call fell back to the configured default while reading
+// as though the caller's number had been honoured — which undercuts the exact
+// count this server exists to give.
 func parseArgs(args json.RawMessage, into any) error {
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
+	trimmed := bytes.TrimSpace(args)
+	// Omitted or null arguments mean the empty object, not an error: a tool
+	// whose arguments are all optional is legitimately called with none.
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		trimmed = []byte(`{}`)
 	}
-	if err := json.Unmarshal(args, into); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(into); err != nil {
 		return toolerr.Newf(toolerr.CodeInvalidArguments, "invalid arguments: %v", err)
 	}
 	return nil

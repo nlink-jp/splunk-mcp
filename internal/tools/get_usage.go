@@ -16,6 +16,10 @@ var getUsageTool = mcpserver.Tool{
 }
 
 func (d *deps) getUsage(ctx context.Context, args json.RawMessage) (any, error) {
+	// No arguments — which still means "none", not "any".
+	if err := parseArgs(args, &struct{}{}); err != nil {
+		return nil, err
+	}
 	host := d.cfg.Host
 	if host == "" {
 		host = "(not configured — set [splunk] host or SPLUNK_HOST)"
@@ -99,7 +103,8 @@ authority.
 
 | code | Meaning | Recovery |
 |---|---|---|
-| missing_argument / invalid_arguments | Bad tool input | Fix the arguments |
+| missing_argument | A required argument was not supplied | Supply it; the message names it |
+| invalid_arguments | An argument name no tool declares (usually a typo), or one of the wrong JSON type. Nothing was sent to Splunk. | Fix the spelling or the type; the message names the field, e.g. unknown field "max_rowz". Arguments are decoded strictly, so a misspelt max_rows is refused rather than ignored |
 | unsafe_spl | Blocked write/delete command | Rework the SPL; allow_commands in config if truly intended |
 | wait_timeout | run_query hit wait_seconds; job still running | Poll check_job with the returned sid; get_results when done; or cancel_job |
 | job_not_done | get_results on an unfinished job | Poll check_job until is_done |

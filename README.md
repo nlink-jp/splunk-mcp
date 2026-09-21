@@ -54,6 +54,15 @@ This server does not write results to a file it chose. It cannot know the
 caller's context window, and an agent runtime that needs a large response on
 disk already puts it there (gem-agent does this automatically).
 
+**Arguments are checked strictly.** A call carrying an argument a tool does not
+declare fails with `invalid_arguments`, naming it — `unknown field "max_rowz"` —
+rather than running without it. That matters most for `max_rows`: a misspelt one
+used to fall back to the configured default while reading as though the caller's
+cap had been honoured, which is the opposite of the explicit count this server
+exists to give. Wrong-typed arguments are refused the same way, and nothing
+reaches Splunk before the arguments decode, so a rejected call starts no search
+job. Omitting arguments entirely still means "none".
+
 ### SPL guard
 
 Write/delete commands (`delete`, `collect`, `mcollect`, `meventcollect`,

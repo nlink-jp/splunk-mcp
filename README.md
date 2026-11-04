@@ -121,7 +121,8 @@ Config resolution order: `--config` flag → `$SPLUNK_MCP_CONFIG` →
 `~/.config/splunk-mcp/config.toml` → `./config.toml`. Connection settings in
 the file are overridden by env vars (`SPLUNK_HOST`, `SPLUNK_TOKEN`,
 `SPLUNK_USER`, `SPLUNK_PASSWORD`, `SPLUNK_APP`) — the same names splunk-cli
-uses, so credentials can be shared.
+uses, so credentials can be shared. A key the file does not know — a typo,
+say — is an error that names it, not a setting silently ignored.
 
 ## Usage
 

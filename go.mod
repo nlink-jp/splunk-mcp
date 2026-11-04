@@ -3,7 +3,7 @@ module github.com/nlink-jp/splunk-mcp
 go 1.24.5
 
 require (
-	github.com/BurntSushi/toml v1.4.0
+	github.com/nlink-jp/toml v0.1.1
 	github.com/spf13/cobra v1.9.1
 )
 

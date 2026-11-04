@@ -117,7 +117,8 @@ config の解決順: `--config` フラグ → `$SPLUNK_MCP_CONFIG` →
 `~/.config/splunk-mcp/config.toml` → `./config.toml`。接続設定は環境変数
 （`SPLUNK_HOST`, `SPLUNK_TOKEN`, `SPLUNK_USER`, `SPLUNK_PASSWORD`,
 `SPLUNK_APP`）がファイルより優先されます — splunk-cli と同じ変数名なので
-認証情報を共用できます。
+認証情報を共用できます。設定ファイルにある知らないキー（打ち間違いなど）は
+黙って無視せず、そのキー名を示してエラーにします。
 
 ## 使い方
 

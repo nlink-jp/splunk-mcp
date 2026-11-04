@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
+	"github.com/nlink-jp/toml"
 
 	"github.com/nlink-jp/splunk-mcp/internal/spl"
 )

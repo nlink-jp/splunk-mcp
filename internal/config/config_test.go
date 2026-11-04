@@ -124,6 +124,17 @@ job_ttl = "notaduration"
 	}
 }
 
+// A key the config does not know — a typo, or a setting from another tool —
+// is refused with its name rather than silently ignored, so a setting that
+// seems to do nothing cannot be one that was never read.
+func TestLoadRefusesUnknownKeys(t *testing.T) {
+	path := writeConfig(t, "[splunk]\nhost = \"https://splunk.example.com:8089\"\n\n[server]\nmax_rwos = 10\n")
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "server.max_rwos") {
+		t.Fatalf("Load = %v, want an error naming server.max_rwos", err)
+	}
+}
+
 func TestLoad_HTTPTimeout(t *testing.T) {
 	path := writeConfig(t, `
 [splunk]

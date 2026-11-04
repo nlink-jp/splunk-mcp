@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.4.0] - 2026-11-04
+
+### Changed
+
+- **An unknown key in `config.toml` is now an error** that names the key,
+  where it used to be skipped without a word. A typo such as `max_rwos` no
+  longer leaves a setting that seems to do nothing. Remove or correct the key
+  the message names.
+- **The config file is read by nlink-jp/toml** (v0.1.1) instead of the
+  third-party `BurntSushi/toml`, so the tool carries no TOML code from
+  outside the organization.
 
 ### Fixed
 
